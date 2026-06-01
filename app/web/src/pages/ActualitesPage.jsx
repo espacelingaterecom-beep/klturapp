@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Search, Newspaper } from 'lucide-react';
+import { Search, Newspaper, Youtube } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import NewsCard from '@/components/NewsCard.jsx';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabaseClient.js';
 
@@ -13,6 +14,8 @@ const ActualitesPage = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+
+  const keywords = ["rap centro", "centro rap", "drill centro", "hip-hop centro", "rap rca"];
 
   useEffect(() => {
     const fetchNews = async () => {
@@ -58,14 +61,39 @@ const ActualitesPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#050505] text-white">
-      <Helmet><title>Actualités - KLTUR RAP</title></Helmet>
+      <Helmet>
+        <title>Actualités - KLTUR RAP</title>
+        <meta name="keywords" content={keywords.join(', ')} />
+      </Helmet>
       <Header />
 
       <main className="flex-grow py-12 px-4 max-w-7xl mx-auto w-full">
+        {/* YouTube Highlight Banner */}
+        <div className="mb-12 bg-red-600/10 border border-red-600/20 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative group">
+          <div className="absolute -right-10 -bottom-10 opacity-10 group-hover:scale-110 transition-transform duration-700">
+            <Youtube className="w-64 h-64" />
+          </div>
+          <div className="relative z-10 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-2 text-red-500 mb-2 font-black uppercase text-xs tracking-widest">
+              <Youtube className="w-5 h-5" /> Chaîne Officielle
+            </div>
+            <h2 className="text-3xl font-black uppercase mb-2">Suivez <span className="text-[#D4AF37]">KLTUR RAP</span> sur YouTube</h2>
+            <p className="text-white/60 font-medium">Découvrez nos clips exclusifs, interviews et reportages sur le mouvement RCA.</p>
+          </div>
+          <Button asChild className="bg-red-600 hover:bg-red-700 text-white font-black uppercase px-8 h-14 rounded-2xl relative z-10 shadow-lg">
+            <a href="https://www.youtube.com/@KLTURRAP" target="_blank" rel="noopener noreferrer">
+              S'abonner maintenant
+            </a>
+          </Button>
+        </div>
+
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-6xl font-black uppercase mb-4">
             Actualités <span className="text-[#D4AF37]">hip-hop</span>
           </h1>
+          <p className="text-white/60 mb-6 uppercase text-[10px] font-bold tracking-[0.3em]">
+            {keywords.map(kw => `#${kw.replace(' ', '')}`).join(' ')}
+          </p>
           <p className="text-white/60">Toute l'actualité de la culture urbaine centrafricaine</p>
         </div>
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, Radio, Newspaper } from 'lucide-react';
+import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, Radio, Newspaper, Link as LinkIcon, FileAudio } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
@@ -34,12 +35,15 @@ const AdminDashboard = () => {
   const [eventImagePreview, setEventImagePreview] = useState(null);
 
   const [newEpisode, setNewEpisode] = useState({ title: '', date: '', duration: '', description: '', audio_url: '' });
+  const [audioSourceType, setAudioSourceType] = useState('link'); // 'link' or 'file'
+  const [audioFile, setAudioFile] = useState(null);
 
   const [newNews, setNewNews] = useState({ title: '', category: 'News', excerpt: '', content: '', image_url: '', source_url: '' });
 
   // Edit states
   const [editingEvent, setEditingEvent] = useState(null);
   const [editingEpisode, setEditingEpisode] = useState(null);
+  const [editingNews, setEditingNews] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -195,17 +199,43 @@ const AdminDashboard = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      let finalAudioUrl = newEpisode.audio_url;
+
+      if (audioSourceType === 'file' && audioFile) {
+        const fileExt = audioFile.name.split('.').pop();
+        const fileName = `radio/${Date.now()}.${fileExt}`;
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('uploads') // On peut réutiliser le bucket uploads ou en créer un 'radio'
+          .upload(fileName, audioFile);
+
+        if (storageError) throw storageError;
+
+        // Obtenir l'URL publique
+        const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(storageData.path);
+        finalAudioUrl = publicUrl;
+      }
+
+      const episodeData = {
+        title: newEpisode.title,
+        date: newEpisode.date,
+        duration: newEpisode.duration,
+        description: newEpisode.description,
+        audio_url: finalAudioUrl
+      };
+
       if (editingEpisode) {
-        const { error } = await supabase.from('radio_episodes').update(newEpisode).eq('id', editingEpisode.id);
+        const { error } = await supabase.from('radio_episodes').update(episodeData).eq('id', editingEpisode.id);
         if (error) throw error;
         toast.success("Épisode mis à jour !");
       } else {
-        const { error } = await supabase.from('radio_episodes').insert([newEpisode]);
+        const { error } = await supabase.from('radio_episodes').insert([episodeData]);
         if (error) throw error;
         toast.success("Épisode publié !");
       }
 
       setNewEpisode({ title: '', date: '', duration: '', description: '', audio_url: '' });
+      setAudioFile(null);
+      setAudioSourceType('link');
       setEditingEpisode(null);
       loadAllData();
     } catch (err) {
@@ -225,17 +255,8 @@ const AdminDashboard = () => {
       description: ep.description || '',
       audio_url: ep.audio_url || ''
     });
+    setAudioSourceType('link');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDeleteEpisode = async (id) => {
-    if (!window.confirm("Supprimer cet épisode ?")) return;
-    const { error } = await supabase.from('radio_episodes').delete().eq('id', id);
-    if (error) toast.error("Erreur de suppression");
-    else {
-      toast.success("Épisode supprimé");
-      loadAllData();
-    }
   };
 
   const handleDeleteEpisode = async (id) => {
@@ -277,8 +298,6 @@ const AdminDashboard = () => {
       setIsSubmitting(false);
     }
   };
-
-  const [editingNews, setEditingNews] = useState(null);
 
   const startEditNews = (n) => {
     setEditingNews(n);
@@ -364,20 +383,20 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="events" className="w-full">
-          <TabsList className="bg-[#0a0a0a] border border-[#222] p-1 mb-8">
-            <TabsTrigger value="events" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
+          <TabsList className="bg-[#0a0a0a] border border-[#222] p-1 mb-8 w-full justify-start overflow-x-auto overflow-y-hidden no-scrollbar h-auto">
+            <TabsTrigger value="events" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
               <Calendar className="w-4 h-4 mr-2" /> Événements
             </TabsTrigger>
-            <TabsTrigger value="radio" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
+            <TabsTrigger value="radio" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
               <Radio className="w-4 h-4 mr-2" /> Radio
             </TabsTrigger>
-            <TabsTrigger value="news" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
+            <TabsTrigger value="news" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
               <Newspaper className="w-4 h-4 mr-2" /> News
             </TabsTrigger>
-            <TabsTrigger value="users" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
+            <TabsTrigger value="users" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
               <Users className="w-4 h-4 mr-2" /> Utilisateurs
             </TabsTrigger>
-            <TabsTrigger value="content" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
+            <TabsTrigger value="content" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
               <Music className="w-4 h-4 mr-2" /> Contenus
             </TabsTrigger>
           </TabsList>
@@ -517,9 +536,45 @@ const AdminDashboard = () => {
                   <Input value={newEpisode.duration} onChange={e => setNewEpisode({...newEpisode, duration: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: 60:00" />
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">URL de l'audio (optionnel)</Label>
-                  <Input value={newEpisode.audio_url} onChange={e => setNewEpisode({...newEpisode, audio_url: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://..." />
+                <div className="space-y-4">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Source de l'audio</Label>
+                  <div className="flex gap-4 p-1 bg-[#111] border border-[#222] rounded-xl h-12">
+                    <button
+                      type="button"
+                      onClick={() => setAudioSourceType('link')}
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all ${audioSourceType === 'link' ? 'bg-[#D4AF37] text-black' : 'text-white/40 hover:text-white'}`}
+                    >
+                      <LinkIcon className="w-3.5 h-3.5" /> Lien Externe
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAudioSourceType('file')}
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all ${audioSourceType === 'file' ? 'bg-[#D4AF37] text-black' : 'text-white/40 hover:text-white'}`}
+                    >
+                      <FileAudio className="w-3.5 h-3.5" /> Fichier Audio
+                    </button>
+                  </div>
+
+                  {audioSourceType === 'link' ? (
+                    <Input
+                      value={newEpisode.audio_url}
+                      onChange={e => setNewEpisode({...newEpisode, audio_url: e.target.value})}
+                      className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]"
+                      placeholder="https://... (ex: SoundCloud, MP3 direct)"
+                    />
+                  ) : (
+                    <div className="relative h-12">
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={e => setAudioFile(e.target.files[0])}
+                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="h-full border border-[#222] bg-[#111] rounded-xl flex items-center px-4 text-xs font-bold text-white/60">
+                        {audioFile ? audioFile.name : "Sélectionner un fichier MP3..."}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="md:col-span-2 space-y-2">
@@ -714,10 +769,12 @@ const AdminDashboard = () => {
           <TabsContent value="content" className="outline-none">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {contents.map(c => (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={`${c.type}-${c.id}`} className="bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden group hover:border-[#D4AF37]/30 transition-all">
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={`${c.contentType}-${c.id}`} className="bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden group hover:border-[#D4AF37]/30 transition-all">
                   <div className="aspect-video relative overflow-hidden bg-[#111]">
-                    <img src={getPublicImageUrl(c.type === 'Musique' ? 'covers' : 'posts', c.cover_art || c.content_url)} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" alt="" />
-                    <div className="absolute top-2 left-2 bg-black/80 backdrop-blur text-[8px] font-black uppercase px-2 py-1 rounded border border-white/10 tracking-widest">{c.type}</div>
+                    <img src={getPublicImageUrl(c.contentType === 'Upload' ? 'covers' : 'posts', c.cover_art || c.content_url)} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" alt="" />
+                    <div className="absolute top-2 left-2 bg-black/80 backdrop-blur text-[8px] font-black uppercase px-2 py-1 rounded border border-white/10 tracking-widest">
+                      {c.contentType === 'Upload' ? (c.type || 'MUSIQUE') : 'POST'}
+                    </div>
                   </div>
                   <div className="p-5">
                     <h4 className="font-black text-sm truncate text-white mb-1">{c.title}</h4>
