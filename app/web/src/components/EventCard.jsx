@@ -33,9 +33,9 @@ const EventCard = ({ event }) => {
       <Link to={`/evenements/${event.id}`} className="group block h-full">
         <div className="bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden hover:border-[#D4AF37] transition-all duration-300 hover:-translate-y-1 flex flex-col h-full">
           <div className="aspect-video relative overflow-hidden bg-[#111]">
-            {event.image && (
+            {(event.image || event.image_url) && (
               <img 
-                src={getFileUrl('covers', event.image)}
+                src={getFileUrl('covers', event.image || event.image_url)}
                 alt={event.title}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               />

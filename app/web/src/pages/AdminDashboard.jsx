@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight } from 'lucide-react';
+import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, Radio, Newspaper } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -25,14 +25,21 @@ const AdminDashboard = () => {
   const [events, setEvents] = useState([]);
   const [users, setUsers] = useState([]);
   const [contents, setContents] = useState([]);
+  const [radioEpisodes, setRadioEpisodes] = useState([]);
+  const [news, setNews] = useState([]);
 
   // Form states
   const [newEvent, setNewEvent] = useState({ title: '', date: '', location: '', event_type: 'Concert', description: '' });
   const [eventImage, setEventImage] = useState(null);
   const [eventImagePreview, setEventImagePreview] = useState(null);
 
+  const [newEpisode, setNewEpisode] = useState({ title: '', date: '', duration: '', description: '', audio_url: '' });
+
+  const [newNews, setNewNews] = useState({ title: '', category: 'News', excerpt: '', content: '', image_url: '', source_url: '' });
+
   // Edit states
   const [editingEvent, setEditingEvent] = useState(null);
+  const [editingEpisode, setEditingEpisode] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -73,6 +80,18 @@ const AdminDashboard = () => {
       setEvents(evs || []);
     } catch (e) { console.error("Events error", e); }
 
+    // Fetch Radio Episodes
+    try {
+      const { data: rad } = await supabase.from('radio_episodes').select('*').order('date', { ascending: false });
+      setRadioEpisodes(rad || []);
+    } catch (e) { console.error("Radio error", e); }
+
+    // Fetch News
+    try {
+      const { data: nw } = await supabase.from('news').select('*').order('created_at', { ascending: false });
+      setNews(nw || []);
+    } catch (e) { console.error("News error", e); }
+
     // 2. Fetch Users (Indépendant et Robuste)
     try {
       const { data: usrs, error: uErr } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -107,7 +126,7 @@ const AdminDashboard = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      let imageUrl = editingEvent?.image_url || null;
+      let imagePath = editingEvent?.image || editingEvent?.image_url || null;
 
       if (eventImage) {
         const fileExt = eventImage.name.split('.').pop();
@@ -116,7 +135,7 @@ const AdminDashboard = () => {
           .from('covers')
           .upload(fileName, eventImage);
         if (storageError) throw storageError;
-        imageUrl = storageData.path;
+        imagePath = storageData.path;
       }
 
       const eventData = {
@@ -125,7 +144,7 @@ const AdminDashboard = () => {
         location: newEvent.location,
         event_type: newEvent.event_type,
         description: newEvent.description,
-        image_url: imageUrl,
+        image: imagePath, // Réactivé
         organizer_id: currentUser.id
       };
 
@@ -161,7 +180,7 @@ const AdminDashboard = () => {
       event_type: event.event_type || 'Concert',
       description: event.description || ''
     });
-    setEventImagePreview(event.image_url ? getPublicImageUrl('covers', event.image_url) : null);
+    setEventImagePreview((event.image || event.image_url) ? getPublicImageUrl('covers', event.image || event.image_url) : null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -170,6 +189,118 @@ const AdminDashboard = () => {
     setNewEvent({ title: '', date: '', location: '', event_type: 'Concert', description: '' });
     setEventImage(null);
     setEventImagePreview(null);
+  };
+
+  const handleCreateOrUpdateEpisode = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      if (editingEpisode) {
+        const { error } = await supabase.from('radio_episodes').update(newEpisode).eq('id', editingEpisode.id);
+        if (error) throw error;
+        toast.success("Épisode mis à jour !");
+      } else {
+        const { error } = await supabase.from('radio_episodes').insert([newEpisode]);
+        if (error) throw error;
+        toast.success("Épisode publié !");
+      }
+
+      setNewEpisode({ title: '', date: '', duration: '', description: '', audio_url: '' });
+      setEditingEpisode(null);
+      loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const startEditEpisode = (ep) => {
+    setEditingEpisode(ep);
+    setNewEpisode({
+      title: ep.title,
+      date: ep.date,
+      duration: ep.duration,
+      description: ep.description || '',
+      audio_url: ep.audio_url || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteEpisode = async (id) => {
+    if (!window.confirm("Supprimer cet épisode ?")) return;
+    const { error } = await supabase.from('radio_episodes').delete().eq('id', id);
+    if (error) toast.error("Erreur de suppression");
+    else {
+      toast.success("Épisode supprimé");
+      loadAllData();
+    }
+  };
+
+  const handleDeleteEpisode = async (id) => {
+    if (!window.confirm("Supprimer cet épisode ?")) return;
+    const { error } = await supabase.from('radio_episodes').delete().eq('id', id);
+    if (error) toast.error("Erreur de suppression");
+    else {
+      toast.success("Épisode supprimé");
+      loadAllData();
+    }
+  };
+
+  const handleCreateOrUpdateNews = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const newsData = {
+        ...newNews,
+        author_id: currentUser.id
+      };
+
+      if (editingNews) {
+        const { error } = await supabase.from('news').update(newsData).eq('id', editingNews.id);
+        if (error) throw error;
+        toast.success("Article mis à jour !");
+      } else {
+        const { error } = await supabase.from('news').insert([newsData]);
+        if (error) throw error;
+        toast.success("Article publié !");
+      }
+
+      setNewNews({ title: '', category: 'News', excerpt: '', content: '', image_url: '', source_url: '' });
+      setEditingNews(null);
+      loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const [editingNews, setEditingNews] = useState(null);
+
+  const startEditNews = (n) => {
+    setEditingNews(n);
+    setNewNews({
+      title: n.title,
+      category: n.category || 'News',
+      excerpt: n.excerpt || '',
+      content: n.content || '',
+      image_url: n.image_url || '',
+      source_url: n.source_url || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteNews = async (id) => {
+    if (!window.confirm("Supprimer cet article ?")) return;
+    const { error } = await supabase.from('news').delete().eq('id', id);
+    if (error) toast.error("Erreur de suppression");
+    else {
+      toast.success("Article supprimé");
+      loadAllData();
+    }
   };
 
   const toggleUserPremium = async (userId, currentStatus) => {
@@ -236,6 +367,12 @@ const AdminDashboard = () => {
           <TabsList className="bg-[#0a0a0a] border border-[#222] p-1 mb-8">
             <TabsTrigger value="events" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
               <Calendar className="w-4 h-4 mr-2" /> Événements
+            </TabsTrigger>
+            <TabsTrigger value="radio" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
+              <Radio className="w-4 h-4 mr-2" /> Radio
+            </TabsTrigger>
+            <TabsTrigger value="news" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
+              <Newspaper className="w-4 h-4 mr-2" /> News
             </TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-8">
               <Users className="w-4 h-4 mr-2" /> Utilisateurs
@@ -328,8 +465,8 @@ const AdminDashboard = () => {
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={ev.id} className="bg-[#0a0a0a] p-6 rounded-3xl border border-[#222] flex flex-col md:flex-row items-center justify-between gap-6 hover:border-[#D4AF37]/30 transition-all group">
                   <div className="flex items-center gap-6 w-full">
                     <div className="h-20 w-20 rounded-2xl overflow-hidden bg-[#111] shrink-0 border border-[#333]">
-                      {ev.image_url ? (
-                        <img src={getPublicImageUrl('covers', ev.image_url)} className="h-full w-full object-cover" alt="" />
+                      {(ev.image || ev.image_url) ? (
+                        <img src={getPublicImageUrl('covers', ev.image || ev.image_url)} className="h-full w-full object-cover" alt="" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center text-white/10"><Calendar className="w-8 h-8" /></div>
                       )}
@@ -352,6 +489,168 @@ const AdminDashboard = () => {
                     </Button>
                   </div>
                 </motion.div>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* RADIO TAB */}
+          <TabsContent value="radio" className="space-y-8 outline-none">
+             <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222]">
+              <h3 className="text-xl font-bold mb-8 flex items-center gap-2 text-[#D4AF37]">
+                <Radio className="w-5 h-5" />
+                {editingEpisode ? "Modifier l'épisode radio" : "Ajouter un nouvel épisode"}
+              </h3>
+
+              <form onSubmit={handleCreateOrUpdateEpisode} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Titre de l'épisode</Label>
+                  <Input value={newEpisode.title} onChange={e => setNewEpisode({...newEpisode, title: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: Épisode 12 : Spécial Makassy" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Date de diffusion</Label>
+                  <Input type="date" value={newEpisode.date} onChange={e => setNewEpisode({...newEpisode, date: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] [color-scheme:dark]" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Durée</Label>
+                  <Input value={newEpisode.duration} onChange={e => setNewEpisode({...newEpisode, duration: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: 60:00" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">URL de l'audio (optionnel)</Label>
+                  <Input value={newEpisode.audio_url} onChange={e => setNewEpisode({...newEpisode, audio_url: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://..." />
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Description / Résumé</Label>
+                  <Textarea value={newEpisode.description} onChange={e => setNewEpisode({...newEpisode, description: e.target.value})} className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[100px] resize-none" placeholder="De quoi parle cet épisode ?" />
+                </div>
+
+                <div className="md:col-span-2 flex gap-4">
+                  <Button type="submit" disabled={isSubmitting} className="flex-grow bg-[#D4AF37] text-black font-black uppercase h-14 rounded-2xl gold-glow hover:bg-[#b5952f]">
+                    {isSubmitting ? 'Enregistrement...' : (editingEpisode ? 'Mettre à jour' : 'Publier l\'épisode')}
+                  </Button>
+                  {editingEpisode && (
+                    <Button type="button" variant="outline" onClick={() => { setEditingEpisode(null); setNewEpisode({ title: '', date: '', duration: '', description: '', audio_url: '' }); }} className="border-[#333] text-white px-8 rounded-2xl hover:bg-red-500 transition-all">
+                      Annuler
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              <h4 className="text-sm font-black uppercase tracking-[0.2em] text-[#D4AF37]">Archives Radio</h4>
+              {radioEpisodes.length === 0 ? (
+                <div className="text-center py-20 bg-[#0a0a0a] rounded-3xl border border-[#222] text-white/20">Aucun épisode archivé</div>
+              ) : radioEpisodes.map(ep => (
+                <div key={ep.id} className="bg-[#0a0a0a] p-6 rounded-3xl border border-[#222] flex items-center justify-between gap-6 hover:border-[#D4AF37]/30 transition-all">
+                  <div className="flex items-center gap-6">
+                    <div className="h-14 w-14 rounded-xl bg-[#111] flex items-center justify-center text-[#D4AF37] border border-[#222]">
+                      <Radio className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-white">{ep.title}</h4>
+                      <p className="text-xs text-white/40 font-bold uppercase tracking-wider">{new Date(ep.date).toLocaleDateString('fr-FR')} • {ep.duration}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => startEditEpisode(ep)} className="border-[#333] text-white hover:border-[#D4AF37] rounded-xl h-10 w-10 p-0">
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button variant="outline" onClick={() => handleDeleteEpisode(ep.id)} className="border-[#333] text-red-500 hover:bg-red-500/10 rounded-xl h-10 w-10 p-0">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* NEWS TAB */}
+          <TabsContent value="news" className="space-y-8 outline-none">
+             <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222]">
+              <h3 className="text-xl font-bold mb-8 flex items-center gap-2 text-[#D4AF37]">
+                <Newspaper className="w-5 h-5" />
+                {editingNews ? "Modifier l'article" : "Publier une actualité"}
+              </h3>
+
+              <form onSubmit={handleCreateOrUpdateNews} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Titre de l'actualité</Label>
+                  <Input value={newNews.title} onChange={e => setNewNews({...newNews, title: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: Sortie de l'album de..." />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Catégorie</Label>
+                  <Select value={newNews.category} onValueChange={v => setNewNews({...newNews, category: v})}>
+                    <SelectTrigger className="bg-[#111] border-[#222] h-12 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#111] border-[#222] text-white">
+                      <SelectItem value="News">News</SelectItem>
+                      <SelectItem value="Interviews">Interviews</SelectItem>
+                      <SelectItem value="Ateliers">Ateliers</SelectItem>
+                      <SelectItem value="Chroniques">Chroniques</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">URL de l'image</Label>
+                  <Input value={newNews.image_url} onChange={e => setNewNews({...newNews, image_url: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://images.unsplash.com/..." />
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Extrait (Court résumé)</Label>
+                  <Input value={newNews.excerpt} onChange={e => setNewNews({...newNews, excerpt: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Quelques mots pour attirer l'attention..." />
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Contenu de l'article</Label>
+                  <Textarea value={newNews.content} onChange={e => setNewNews({...newNews, content: e.target.value})} className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[200px] resize-none" placeholder="Rédigez votre article ici..." />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Lien source (Optionnel)</Label>
+                  <Input value={newNews.source_url} onChange={e => setNewNews({...newNews, source_url: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Lien vers article original..." />
+                </div>
+
+                <div className="md:col-span-2 flex gap-4">
+                  <Button type="submit" disabled={isSubmitting} className="flex-grow bg-[#D4AF37] text-black font-black uppercase h-14 rounded-2xl gold-glow hover:bg-[#b5952f]">
+                    {isSubmitting ? 'Enregistrement...' : (editingNews ? 'Enregistrer les modifications' : 'Publier l\'article')}
+                  </Button>
+                  {editingNews && (
+                    <Button type="button" variant="outline" onClick={() => { setEditingNews(null); setNewNews({ title: '', category: 'News', excerpt: '', content: '', image_url: '', source_url: '' }); }} className="border-[#333] text-white px-8 rounded-2xl hover:bg-red-500 transition-all">
+                      Annuler
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {news.length === 0 ? (
+                <div className="md:col-span-2 text-center py-20 bg-[#0a0a0a] rounded-3xl border border-[#222] text-white/20">Aucun article publié</div>
+              ) : news.map(n => (
+                <div key={n.id} className="bg-[#0a0a0a] p-5 rounded-3xl border border-[#222] flex gap-5 hover:border-[#D4AF37]/30 transition-all group">
+                   <div className="h-24 w-24 rounded-2xl overflow-hidden shrink-0 border border-[#333]">
+                      <img src={n.image_url || 'https://via.placeholder.com/150'} className="h-full w-full object-cover" alt="" />
+                   </div>
+                   <div className="flex-grow min-w-0">
+                      <span className="text-[10px] font-black uppercase text-[#D4AF37] mb-1 inline-block">{n.category}</span>
+                      <h4 className="font-bold text-white truncate text-lg mb-2">{n.title}</h4>
+                      <div className="flex items-center gap-3">
+                        <Button variant="outline" size="sm" onClick={() => startEditNews(n)} className="h-8 border-[#222] text-xs font-bold text-white hover:border-[#D4AF37]">
+                          <Edit className="w-3 h-3 mr-1" /> Modifier
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleDeleteNews(n.id)} className="h-8 border-[#222] text-xs font-bold text-red-500 hover:bg-red-500/10">
+                          <Trash2 className="w-3 h-3 mr-1" />
+                        </Button>
+                      </div>
+                   </div>
+                </div>
               ))}
             </div>
           </TabsContent>

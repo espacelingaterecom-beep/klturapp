@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Award, Zap, BarChart3, Headphones, Star } from 'lucide-react';
+import { CheckCircle2, Award, Zap, BarChart3, Headphones, Star, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -135,9 +135,18 @@ const PremiumPage = () => {
                     <Button 
                       onClick={handlePayment} 
                       disabled={loading}
-                      className="w-full h-16 bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all font-black text-lg uppercase tracking-wider animate-gold-pulse relative overflow-hidden"
+                      className="w-full h-16 bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all font-black text-lg uppercase tracking-wider animate-gold-pulse relative overflow-hidden mb-4"
                     >
                       {loading ? 'Redirection...' : 'Payer avec Orange Money'}
+                    </Button>
+
+                    <Button
+                      asChild
+                      className="w-full h-16 bg-[#25D366] text-white hover:bg-[#128C7E] transition-all font-black text-lg uppercase tracking-wider flex items-center justify-center gap-2"
+                    >
+                      <a href="https://wa.me/qr/RXPRJWAHFIXRP1" target="_blank" rel="noopener noreferrer">
+                        <MessageCircle className="w-6 h-6 fill-current" /> Payer via WhatsApp
+                      </a>
                     </Button>
                     <p className="text-center text-xs text-white/40 mt-4">Paiement sécurisé. Activation immédiate après confirmation.</p>
                   </div>

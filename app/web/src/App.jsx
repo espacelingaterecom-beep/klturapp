@@ -16,6 +16,7 @@ import EvenementsPage from './pages/EvenementsPage.jsx';
 import ArtistesPage from './pages/ArtistesPage.jsx';
 import ActualitesPage from './pages/ActualitesPage.jsx';
 import VideosPage from './pages/VideosPage.jsx';
+import EventDetailPage from './pages/EventDetailPage.jsx';
 import TeamPage from './pages/TeamPage.jsx';
 import VolunteerPage from './pages/VolunteerPage.jsx';
 import ContactPage from './pages/ContactPage.jsx';
@@ -64,6 +65,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/ecouter" element={<EcouterPage />} />
             <Route path="/evenements" element={<EvenementsPage />} />
+            <Route path="/evenements/:id" element={<EventDetailPage />} />
             <Route path="/artistes" element={<ArtistesPage />} />
             <Route path="/actualites" element={<ActualitesPage />} />
             <Route path="/videos" element={<VideosPage />} />

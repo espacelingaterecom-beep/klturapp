@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext.jsx';
@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient.js';
 
 const FloatingMessageButton = () => {
   const { isAuthenticated, currentUser } = useAuth();
+  const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -47,7 +48,7 @@ const FloatingMessageButton = () => {
     };
   }, [isAuthenticated, currentUser]);
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated || location.pathname === '/messages') return null;
 
   return (
     <motion.div
