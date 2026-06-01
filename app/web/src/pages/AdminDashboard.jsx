@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, Radio, Newspaper, Link as LinkIcon, FileAudio } from 'lucide-react';
+import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, Radio, Newspaper, Link as LinkIcon, FileAudio, UserCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -28,6 +28,7 @@ const AdminDashboard = () => {
   const [contents, setContents] = useState([]);
   const [radioEpisodes, setRadioEpisodes] = useState([]);
   const [news, setNews] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
 
   // Form states
   const [newEvent, setNewEvent] = useState({ title: '', date: '', location: '', event_type: 'Concert', description: '' });
@@ -40,10 +41,13 @@ const AdminDashboard = () => {
 
   const [newNews, setNewNews] = useState({ title: '', category: 'News', excerpt: '', content: '', image_url: '', source_url: '' });
 
+  const [newMember, setNewMember] = useState({ name: '', role: '', bio: '', image_url: '' });
+
   // Edit states
   const [editingEvent, setEditingEvent] = useState(null);
   const [editingEpisode, setEditingEpisode] = useState(null);
   const [editingNews, setEditingNews] = useState(null);
+  const [editingMember, setEditingMember] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -95,6 +99,12 @@ const AdminDashboard = () => {
       const { data: nw } = await supabase.from('news').select('*').order('created_at', { ascending: false });
       setNews(nw || []);
     } catch (e) { console.error("News error", e); }
+
+    // Fetch Team
+    try {
+      const { data: tm } = await supabase.from('team_members').select('*').order('created_at', { ascending: true });
+      setTeamMembers(tm || []);
+    } catch (e) { console.error("Team error", e); }
 
     // 2. Fetch Users (Indépendant et Robuste)
     try {
@@ -322,6 +332,52 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleCreateOrUpdateMember = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      if (editingMember) {
+        const { error } = await supabase.from('team_members').update(newMember).eq('id', editingMember.id);
+        if (error) throw error;
+        toast.success("Membre mis à jour !");
+      } else {
+        const { error } = await supabase.from('team_members').insert([newMember]);
+        if (error) throw error;
+        toast.success("Membre ajouté !");
+      }
+
+      setNewMember({ name: '', role: '', bio: '', image_url: '' });
+      setEditingMember(null);
+      loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const startEditMember = (m) => {
+    setEditingMember(m);
+    setNewMember({
+      name: m.name,
+      role: m.role,
+      bio: m.bio || '',
+      image_url: m.image_url || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteMember = async (id) => {
+    if (!window.confirm("Supprimer ce membre de l'équipe ?")) return;
+    const { error } = await supabase.from('team_members').delete().eq('id', id);
+    if (error) toast.error("Erreur de suppression");
+    else {
+      toast.success("Membre supprimé");
+      loadAllData();
+    }
+  };
+
   const toggleUserPremium = async (userId, currentStatus) => {
     const { error } = await supabase.from('profiles').update({ is_premium: !currentStatus }).eq('id', userId);
     if (!error) {
@@ -392,6 +448,9 @@ const AdminDashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="news" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
               <Newspaper className="w-4 h-4 mr-2" /> News
+            </TabsTrigger>
+            <TabsTrigger value="team" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
+              <UserCircle className="w-4 h-4 mr-2" /> Équipe
             </TabsTrigger>
             <TabsTrigger value="users" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
               <Users className="w-4 h-4 mr-2" /> Utilisateurs
@@ -702,6 +761,74 @@ const AdminDashboard = () => {
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => handleDeleteNews(n.id)} className="h-8 border-[#222] text-xs font-bold text-red-500 hover:bg-red-500/10">
                           <Trash2 className="w-3 h-3 mr-1" />
+                        </Button>
+                      </div>
+                   </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* TEAM TAB */}
+          <TabsContent value="team" className="space-y-8 outline-none">
+            <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222]">
+              <h3 className="text-xl font-bold mb-8 flex items-center gap-2 text-[#D4AF37]">
+                <UserCircle className="w-5 h-5" />
+                {editingMember ? "Modifier le membre" : "Ajouter un membre à l'équipe"}
+              </h3>
+
+              <form onSubmit={handleCreateOrUpdateMember} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Nom complet</Label>
+                  <Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: Jonathan Mambachaka" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Rôle / Poste</Label>
+                  <Input value={newMember.role} onChange={e => setNewMember({...newMember, role: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: CEO & Fondateur" />
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">URL de la photo</Label>
+                  <Input value={newMember.image_url} onChange={e => setNewMember({...newMember, image_url: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://..." />
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Biographie courte</Label>
+                  <Textarea value={newMember.bio} onChange={e => setNewMember({...newMember, bio: e.target.value})} className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[100px] resize-none" placeholder="Description du membre..." />
+                </div>
+
+                <div className="md:col-span-2 flex gap-4">
+                  <Button type="submit" disabled={isSubmitting} className="flex-grow bg-[#D4AF37] text-black font-black uppercase h-14 rounded-2xl gold-glow hover:bg-[#b5952f]">
+                    {isSubmitting ? 'Enregistrement...' : (editingMember ? 'Mettre à jour' : 'Ajouter à l\'équipe')}
+                  </Button>
+                  {editingMember && (
+                    <Button type="button" variant="outline" onClick={() => { setEditingMember(null); setNewMember({ name: '', role: '', bio: '', image_url: '' }); }} className="border-[#333] text-white px-8 rounded-2xl hover:bg-red-500 transition-all">
+                      Annuler
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {teamMembers.length === 0 ? (
+                <div className="md:col-span-3 text-center py-20 bg-[#0a0a0a] rounded-3xl border border-[#222] text-white/20">Aucun membre enregistré</div>
+              ) : teamMembers.map(m => (
+                <div key={m.id} className="bg-[#0a0a0a] p-5 rounded-3xl border border-[#222] flex flex-col hover:border-[#D4AF37]/30 transition-all group">
+                   <div className="h-48 w-full rounded-2xl overflow-hidden border border-[#333] mb-4">
+                      <img src={m.image_url || 'https://via.placeholder.com/300'} className="h-full w-full object-cover filter grayscale group-hover:grayscale-0 transition-all" alt="" />
+                   </div>
+                   <div className="flex-grow">
+                      <h4 className="font-bold text-white text-lg">{m.name}</h4>
+                      <p className="text-[#D4AF37] text-xs font-black uppercase tracking-widest mb-3">{m.role}</p>
+                      <p className="text-white/50 text-sm line-clamp-3 mb-4">{m.bio}</p>
+                      <div className="flex items-center gap-2 pt-4 border-t border-[#222]">
+                        <Button variant="outline" size="sm" onClick={() => startEditMember(m)} className="flex-1 h-10 border-[#222] text-xs font-bold text-white hover:border-[#D4AF37]">
+                          <Edit className="w-3.5 h-3.5 mr-1" /> Modifier
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleDeleteMember(m.id)} className="h-10 w-10 border-[#222] text-red-500 hover:bg-red-500/10">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                    </div>

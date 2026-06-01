@@ -1,5 +1,6 @@
-import React from 'react';
-import { Route, Routes, BrowserRouter as Router } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Route, Routes, BrowserRouter as Router, useNavigate, useLocation } from 'react-router-dom';
+import { App as CapApp } from '@capacitor/app';
 import { Toaster } from '@/components/ui/sonner';
 import ScrollToTop from './components/ScrollToTop.jsx';
 import { AuthProvider } from './contexts/AuthContext.jsx';
@@ -48,11 +49,36 @@ import ProfileEditPage from './pages/ProfileEditPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
 
+// Component to handle Android Back Button
+const BackButtonHandler = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const handleBackButton = CapApp.addListener('appBackButton', (event) => {
+      if (location.pathname === '/' || location.pathname === '/dashboard') {
+        // If on home or dashboard, we can let the app exit or minimize
+        CapApp.exitApp();
+      } else {
+        // Otherwise, navigate back in history
+        navigate(-1);
+      }
+    });
+
+    return () => {
+      handleBackButton.then(h => h.remove());
+    };
+  }, [navigate, location]);
+
+  return null;
+};
+
 function App() {
   return (
     <AuthProvider>
       <AudioProvider>
         <Router>
+          <BackButtonHandler />
           <ScrollToTop />
           <Toaster position="top-right" theme="dark" toastOptions={{
             style: { background: '#111', border: '1px solid #333', color: '#fff' }
