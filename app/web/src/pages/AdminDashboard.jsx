@@ -797,9 +797,9 @@ const AdminDashboard = () => {
 
                     <div className="flex gap-2">
                        <Button asChild size="sm" variant="ghost" className="flex-grow text-[10px] font-black uppercase text-white/60 hover:text-[#D4AF37] hover:bg-transparent">
-                          <Link to={c.type === 'Musique' ? `/uploads/${c.id}` : `/posts/${c.id}`}>Ouvrir <ChevronRight className="w-3 h-3 ml-1"/></Link>
+                          <Link to={c.contentType === 'Upload' ? `/uploads/${c.id}` : `/posts/${c.id}`}>Ouvrir <ChevronRight className="w-3 h-3 ml-1"/></Link>
                        </Button>
-                       <Button size="sm" variant="ghost" onClick={() => deleteContent(c.id, c.type)} className="text-red-500 hover:bg-red-500/10 rounded-lg h-9 w-9 p-0">
+                       <Button size="sm" variant="ghost" onClick={() => deleteContent(c.id, c.contentType)} className="text-red-500 hover:bg-red-500/10 rounded-lg h-9 w-9 p-0">
                           <Trash2 className="w-4 h-4" />
                        </Button>
                     </div>

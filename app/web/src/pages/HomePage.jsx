@@ -87,13 +87,21 @@ const HomePage = () => {
                 <h2 className="text-4xl font-bold mb-2">Actualités <span className="text-[#D4AF37]">KLTUR RAP</span></h2>
                 <p className="text-white/60 text-lg">Découvrez les dernières nouvelles, sorties et événements.</p>
               </div>
-              <Link to="/actualites" className="hidden md:flex items-center text-[#D4AF37] font-bold hover:underline">
+              <Link to="/actualites" className="flex items-center text-[#D4AF37] font-bold hover:underline">
                 Voir tout <ArrowRight className="w-4 h-4 ml-2" />
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
               {news.map(item => <NewsCard key={item.id} news={item} />)}
+            </div>
+
+            <div className="mt-8 text-center md:hidden">
+               <Link to="/actualites">
+                 <Button variant="outline" className="border-[#D4AF37] text-[#D4AF37] w-full h-12 font-bold uppercase text-xs">
+                   Voir plus d'actualités
+                 </Button>
+               </Link>
             </div>
           </div>
         </section>
