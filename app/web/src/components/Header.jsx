@@ -13,7 +13,7 @@ const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, currentUser, logout, unreadCount } = useAuth();
-  const [isOpen = false, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   // Sécurisation des rôles
   const isAdmin = currentUser?.is_admin === true || currentUser?.isAdmin === true;
