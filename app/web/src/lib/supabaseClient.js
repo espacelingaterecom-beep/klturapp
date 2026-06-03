@@ -71,6 +71,31 @@ export function subscribeNotifications(myUserId, onNotification) {
   return () => supabase.removeChannel(channel);
 }
 
+export async function markConversationRead(conversationId, userId) {
+  const { error } = await supabase
+    .from('messages')
+    .update({ is_read: true })
+    .eq('conversation_id', conversationId)
+    .eq('recipient_id', userId)
+    .eq('is_read', false);
+
+  if (error) console.error("Error marking messages as read:", error);
+}
+
+export async function fetchUnreadCount(userId) {
+  const { count, error } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('recipient_id', userId)
+    .eq('is_read', false);
+
+  if (error) {
+    console.error("Error fetching unread count:", error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
 export function subscribePresence(conversationId, userId, onPresenceState) {
   const channel = supabase.channel(`conv:${conversationId}:presence`, {
     config: { presence: { key: userId } },
@@ -87,42 +112,5 @@ export function subscribePresence(conversationId, userId, onPresenceState) {
       }
     });
 
-  return () => supabase.removeChannel(channel);
-}
-
-export function subscribeNotifications(myUserId, onNotification) {
-  const channel = supabase.channel(`user:${myUserId}:messages-notifs`, {
-    config: { private: true },
-  });
-
-  // Reçus
-  channel.on(
-    'postgres_changes',
-    {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'messages',
-      filter: `recipient_id=eq.${myUserId}`,
-    },
-    (payload) => {
-      onNotification({ message: payload.new, type: 'received' });
-    }
-  );
-
-  // Envoyés
-  channel.on(
-    'postgres_changes',
-    {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'messages',
-      filter: `sender_id=eq.${myUserId}`,
-    },
-    (payload) => {
-      onNotification({ message: payload.new, type: 'sent' });
-    }
-  );
-
-  channel.subscribe();
   return () => supabase.removeChannel(channel);
 }

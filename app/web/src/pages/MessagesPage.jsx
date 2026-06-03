@@ -8,11 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext.jsx';
-import { supabase, subscribeChat, subscribePresence } from '@/lib/supabaseClient.js';
+import { supabase, subscribeChat, subscribePresence, markConversationRead } from '@/lib/supabaseClient.js';
 import { toast } from 'sonner';
 
 const MessagesPage = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, fetchUnreadCount } = useAuth();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
   const [activeConv, setActiveConv] = useState(null);
@@ -59,17 +59,9 @@ const MessagesPage = () => {
         if (error) throw error;
         setMessages(data || []);
 
-        // Marquer les messages reçus comme lus
-        const unreadIds = (data || [])
-          .filter(m => m.recipient_id === currentUser.id && !m.is_read)
-          .map(m => m.id);
-
-        if (unreadIds.length > 0) {
-          await supabase
-            .from('messages')
-            .update({ is_read: true })
-            .in('id', unreadIds);
-        }
+        // Marquer la conversation comme lue
+        await markConversationRead(activeConv.id, currentUser.id);
+        fetchUnreadCount(currentUser.id);
       } catch (err) {
         console.error(err);
       }
@@ -82,10 +74,8 @@ const MessagesPage = () => {
 
       // Si on reçoit un message dans la conversation active, on le marque comme lu
       if (newMessage.recipient_id === currentUser.id) {
-        await supabase
-          .from('messages')
-          .update({ is_read: true })
-          .eq('id', newMessage.id);
+        await markConversationRead(activeConv.id, currentUser.id);
+        fetchUnreadCount(currentUser.id);
       }
     });
 

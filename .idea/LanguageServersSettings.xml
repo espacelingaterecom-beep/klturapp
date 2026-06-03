@@ -10,6 +10,13 @@
             </LanguageServerDefinitionSettings>
           </value>
         </entry>
+        <entry key="fcfe3642-9eaf-44d1-95b4-b835e87e144d">
+          <value>
+            <LanguageServerDefinitionSettings>
+              <option name="errorReportingKind" value="in_log" />
+            </LanguageServerDefinitionSettings>
+          </value>
+        </entry>
       </map>
     </state>
   </component>

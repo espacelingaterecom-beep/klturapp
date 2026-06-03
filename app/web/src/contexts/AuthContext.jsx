@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, subscribeNotifications } from '@/lib/supabaseClient.js';
+import { supabase, subscribeNotifications, fetchUnreadCount } from '@/lib/supabaseClient.js';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { Capacitor } from '@capacitor/core';
 import { toast } from 'sonner';
@@ -15,6 +15,11 @@ export const AuthProvider = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
 
+  const refreshUnreadCount = async (userId) => {
+    const count = await fetchUnreadCount(userId);
+    setUnreadCount(count);
+  };
+
   const updateUser = async (session) => {
     try {
       if (session?.user) {
@@ -26,6 +31,7 @@ export const AuthProvider = ({ children }) => {
 
         setCurrentUser(baseUser);
         setIsAuthenticated(true);
+        refreshUnreadCount(session.user.id);
 
         // On récupère les détails du profil en arrière-plan (non-bloquant)
         supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
@@ -201,6 +207,7 @@ export const AuthProvider = ({ children }) => {
       logout,
       unreadCount,
       setUnreadCount,
+      fetchUnreadCount: refreshUnreadCount,
       notifications,
       isPremium: currentUser?.is_premium || currentUser?.isPremium || false,
       isAdmin: currentUser?.is_admin || currentUser?.isAdmin || false
