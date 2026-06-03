@@ -251,22 +251,47 @@ const Header = () => {
             <SheetContent side="right" className="bg-[#0a0a0a] border-l border-[#222] text-white">
               <SheetTitle className="text-[#D4AF37] font-black uppercase text-left mb-8 border-b border-[#222] pb-4">Menu</SheetTitle>
               <div className="flex flex-col gap-6">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setIsOpen(false)}
-                    className="text-lg font-bold uppercase flex items-center justify-between"
-                  >
-                    {item.name}
-                    {item.name === 'Messages' && unreadCount > 0 && (
-                      <span className="bg-red-600 text-white text-[10px] h-5 w-5 flex items-center justify-center rounded-full animate-pulse">
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    )}
-                  </Link>
-                ))}
-                {isAdmin && <Link to="/admin" onClick={() => setIsOpen(false)} className="text-[#D4AF37] font-bold uppercase flex items-center gap-2"><Shield className="w-5 h-5"/> Administration</Link>}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Navigation</p>
+                  <div className="flex flex-col gap-4">
+                    {navItems.map((item) => (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setIsOpen(false)}
+                        className="text-lg font-bold uppercase flex items-center justify-between"
+                      >
+                        {item.name}
+                        {item.name === 'Messages' && unreadCount > 0 && (
+                          <span className="bg-red-600 text-white text-[10px] h-5 w-5 flex items-center justify-center rounded-full animate-pulse">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                    {isAdmin && <Link to="/admin" onClick={() => setIsOpen(false)} className="text-[#D4AF37] font-bold uppercase flex items-center gap-2"><Shield className="w-5 h-5"/> Administration</Link>}
+                  </div>
+                </div>
+
+                {isAuthenticated && (
+                  <div className="pt-6 border-t border-[#222] space-y-4">
+                    <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Mon Compte</p>
+                    <div className="flex flex-col gap-4">
+                      <Link to={`/profil/${currentUser?.id}`} onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <User className="w-5 h-5 text-[#D4AF37]" /> Mon Profil
+                      </Link>
+                      <Link to="/modifier-profil" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <Settings className="w-5 h-5 text-[#D4AF37]" /> Paramètres
+                      </Link>
+                      <Link to="/ma-musique" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <WifiOff className="w-5 h-5 text-[#D4AF37]" /> Hors ligne
+                      </Link>
+                      <button onClick={() => { handleLogout(); setIsOpen(false); }} className="text-lg font-bold uppercase flex items-center gap-3 text-red-500 text-left">
+                        <LogOut className="w-5 h-5" /> Déconnexion
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </SheetContent>
           </Sheet>
