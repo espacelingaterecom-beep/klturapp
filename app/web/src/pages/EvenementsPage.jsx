@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/supabaseClient.js';
+import { OfflineManager } from '@/lib/offlineManager.js';
 import { useDebounce } from '@/hooks/use-debounce.js';
+import { Capacitor } from '@capacitor/core';
 
 const EvenementsPage = () => {
   const [events, setEvents] = useState([]);
@@ -20,6 +22,13 @@ const EvenementsPage = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       setLoading(true);
+
+      // Charger le cache en premier sur mobile pour la réactivité
+      if (Capacitor.isNativePlatform() && !search && typeFilter === 'all') {
+        const cached = await OfflineManager.getFromCache('events');
+        if (cached) setEvents(cached);
+      }
+
       try {
         let query = supabase
           .from('events')
@@ -54,8 +63,14 @@ const EvenementsPage = () => {
         });
 
         setEvents(sorted);
+
+        // Sauvegarder dans le cache pour le mode hors ligne (seulement si vue par défaut)
+        if (Capacitor.isNativePlatform() && !search && typeFilter === 'all') {
+          await OfflineManager.saveToCache('events', sorted);
+        }
       } catch (err) {
         console.error(err);
+        // Si erreur (offline), le cache est déjà affiché
       } finally {
         setLoading(false);
       }

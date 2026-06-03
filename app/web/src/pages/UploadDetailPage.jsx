@@ -42,6 +42,7 @@ const UploadDetailPage = () => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
 
   const getFileUrl = (bucket, path) => {
     if (!path) return '';
@@ -482,7 +483,19 @@ const UploadDetailPage = () => {
                   </div>
                 )}
                 {upload.description ? (
-                  <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{upload.description}</p>
+                  <div className="relative">
+                    <p className={`text-white/80 leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isDescExpanded ? 'line-clamp-3 md:line-clamp-none' : ''}`}>
+                      {upload.description}
+                    </p>
+                    {upload.description.length > 150 && (
+                      <button
+                        onClick={() => setIsDescExpanded(!isDescExpanded)}
+                        className="mt-2 text-[#D4AF37] font-bold text-xs uppercase tracking-widest md:hidden"
+                      >
+                        {isDescExpanded ? 'Voir moins' : 'Lire la suite'}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-white/40 italic">Aucune description fournie.</p>
                 )}

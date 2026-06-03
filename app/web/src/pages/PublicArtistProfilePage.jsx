@@ -27,6 +27,7 @@ const PublicArtistProfilePage = () => {
   const [stats, setStats] = useState({ views: 0, total: 0, followers: 0, posts: 0, reposts: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
   const [followId, setFollowId] = useState(null);
+  const [isBioExpanded, setIsBioExpanded] = useState(false);
 
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [showLikersModal, setShowLikersModal] = useState(false);
@@ -244,7 +245,21 @@ const PublicArtistProfilePage = () => {
                   </div>
                   <p className="text-[#D4AF37] font-bold uppercase tracking-wider text-sm mb-4">{artist?.user_role || 'Artiste'}</p>
                   
-                  {artist?.bio && <p className="text-white/80 max-w-2xl mb-6 leading-relaxed">{artist.bio}</p>}
+                  {artist?.bio && (
+                    <div className="mb-6 relative">
+                      <p className={`text-white/80 max-w-2xl leading-relaxed transition-all duration-300 ${!isBioExpanded ? 'line-clamp-2 md:line-clamp-none' : ''}`}>
+                        {artist.bio}
+                      </p>
+                      {artist.bio.length > 100 && (
+                        <button
+                          onClick={() => setIsBioExpanded(!isBioExpanded)}
+                          className="mt-1 text-[#D4AF37] font-bold text-[10px] uppercase tracking-widest md:hidden"
+                        >
+                          {isBioExpanded ? 'Voir moins' : 'Lire la bio'}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-6">
                     {isOwner ? (

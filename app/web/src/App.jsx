@@ -25,6 +25,7 @@ import SupabaseTest from './pages/SupabaseTest.jsx';
 // Auth & Premium Pages
 import LoginPage from './pages/LoginPage.jsx';
 import SignupPage from './pages/SignupPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import PremiumPage from './pages/PremiumPage.jsx';
 import PublicArtistProfilePage from './pages/PublicArtistProfilePage.jsx';
 
@@ -77,6 +78,7 @@ function App() {
             {/* Auth & Premium */}
             <Route path="/connexion" element={<LoginPage />} />
             <Route path="/inscription" element={<SignupPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/premium" element={<PremiumPage />} />
             <Route path="/profil/:userId" element={<PublicArtistProfilePage />} />
 

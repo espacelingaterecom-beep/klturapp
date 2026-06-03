@@ -105,7 +105,7 @@ const TeamPage = () => {
                     </div>
                     
                     <div className="p-6 border-t border-[#222]">
-                      <p className="text-white/70 text-sm leading-relaxed">
+                      <p className="text-white/70 text-sm leading-relaxed line-clamp-3 md:line-clamp-none hover:line-clamp-none transition-all cursor-default">
                         {member.bio}
                       </p>
                     </div>

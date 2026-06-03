@@ -2,11 +2,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, subscribeNotifications, fetchUnreadCount } from '@/lib/supabaseClient.js';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 import { toast } from 'sonner';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
+
+const PROFILE_CACHE_KEY = 'cached_user_profile';
 
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -23,37 +26,52 @@ export const AuthProvider = ({ children }) => {
   const updateUser = async (session) => {
     try {
       if (session?.user) {
+        // 1. Tenter de charger le cache immédiatement pour la fluidité
+        const { value: cached } = await Preferences.get({ key: PROFILE_CACHE_KEY });
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.id === session.user.id) {
+            setCurrentUser(parsed);
+            setIsAuthenticated(true);
+          }
+        }
+
         const baseUser = {
           id: session.user.id,
           email: session.user.email,
           ...(session.user.user_metadata || {}),
         };
 
-        setCurrentUser(baseUser);
+        if (!currentUser) setCurrentUser(baseUser);
         setIsAuthenticated(true);
         refreshUnreadCount(session.user.id);
 
-        // On récupère les détails du profil en arrière-plan (non-bloquant)
+        // 2. On récupère les détails frais du profil (si en ligne)
         supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
-          .then(({ data: profile }) => {
-            if (profile) {
-              setCurrentUser(prev => ({
-                ...prev,
+          .then(async ({ data: profile, error }) => {
+            if (profile && !error) {
+              const fullUser = {
+                ...baseUser,
                 ...profile,
-                // On normalise les noms de variables pour le reste de l'app
                 isPremium: profile.is_premium === true,
                 isAdmin: profile.is_admin === true
-              }));
+              };
+              setCurrentUser(fullUser);
+              // Sauvegarder dans le cache pour le mode hors ligne
+              await Preferences.set({
+                key: PROFILE_CACHE_KEY,
+                value: JSON.stringify(fullUser)
+              });
             }
           });
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        await Preferences.remove({ key: PROFILE_CACHE_KEY });
       }
     } catch (e) {
       console.error("Auth update error:", e);
     } finally {
-      // On débloque l'affichage quoi qu'il arrive
       setLoading(false);
     }
   };

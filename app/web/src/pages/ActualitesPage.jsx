@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Search, Newspaper } from 'lucide-react';
+import { Search, Newspaper, Youtube, ArrowUpRight } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import NewsCard from '@/components/NewsCard.jsx';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient.js';
+import { OfflineManager } from '@/lib/offlineManager.js';
+import { Capacitor } from '@capacitor/core';
 
 const ActualitesPage = () => {
   const [news, setNews] = useState([]);
@@ -17,8 +21,18 @@ const ActualitesPage = () => {
   useEffect(() => {
     const fetchNews = async () => {
       setLoading(true);
+
+      // Charger le cache en premier
+      if (Capacitor.isNativePlatform() && !search && filter === 'all') {
+        const cached = await OfflineManager.getFromCache('news');
+        if (cached) setNews(cached);
+      }
+
       try {
-        let query = supabase.from('news').select('*');
+        let query = supabase
+          .from('news')
+          .select('*')
+          .lte('published_at', new Date().toISOString());
 
         if (filter !== 'all') {
           query = query.eq('category', filter);
@@ -28,15 +42,22 @@ const ActualitesPage = () => {
           query = query.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
         }
 
-        // Tri par date de création
-        const { data, error } = await query.order('created_at', { ascending: false });
+        // Tri par date de publication
+        const { data, error } = await query.order('published_at', { ascending: false });
 
         if (error) {
           // Si le tri échoue, on récupère les données sans tri
-          const { data: fallbackData } = await supabase.from('news').select('*');
+          const { data: fallbackData } = await supabase
+            .from('news')
+            .select('*')
+            .lte('published_at', new Date().toISOString());
           setNews(fallbackData || []);
         } else {
           setNews(data || []);
+          // Sauvegarder dans le cache
+          if (Capacitor.isNativePlatform() && !search && filter === 'all') {
+            await OfflineManager.saveToCache('news', data);
+          }
         }
       } catch (err) {
         console.error("Critical News Page Error:", err);
@@ -93,6 +114,43 @@ const ActualitesPage = () => {
             ))}
           </div>
         </div>
+
+        {/* YouTube Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-7xl mx-auto mb-16"
+        >
+          <a
+            href="https://www.youtube.com/@KLTURRAP"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group block relative overflow-hidden rounded-3xl bg-gradient-to-r from-red-600 to-black p-8 md:p-12 border border-white/10"
+          >
+            <div className="absolute top-0 right-0 -mt-12 -mr-12 w-64 h-64 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors" />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="text-center md:text-left">
+                <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
+                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-red-600 shadow-lg">
+                    <Youtube className="w-6 h-6 fill-current" />
+                  </div>
+                  <span className="text-white font-black uppercase tracking-[0.3em] text-xs">Exclusivité KLTUR RAP</span>
+                </div>
+                <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                  Suivez-nous sur <br className="hidden md:block" /><span className="text-white/80">YouTube</span>
+                </h2>
+                <p className="text-white/60 font-medium max-w-md">
+                  Découvrez nos interviews exclusives, les replays de la radio et les meilleurs clips de la scène urbaine centrafricaine.
+                </p>
+              </div>
+
+              <Button className="bg-white text-black hover:bg-white/90 font-black uppercase px-8 h-14 rounded-2xl group-hover:scale-105 transition-transform">
+                S'abonner maintenant <ArrowUpRight className="ml-2 w-5 h-5" />
+              </Button>
+            </div>
+          </a>
+        </motion.div>
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

@@ -18,7 +18,8 @@ const HomePage = () => {
         const { data, error } = await supabase
           .from('news')
           .select('*, profiles:author_id(*)')
-          .order('created_at', { ascending: false })
+          .lte('published_at', new Date().toISOString()) // Uniquement les news déjà publiées
+          .order('published_at', { ascending: false })
           .limit(6);
 
         if (error) throw error;

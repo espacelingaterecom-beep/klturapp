@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, SkipForward, SkipBack, Repeat, Repeat1, Shuffle, Volume2, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useAudio } from '@/contexts/AudioContext.jsx';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 
 const GlobalPlayer = () => {
+  const location = useLocation();
   const {
     currentTrack, isPlaying, progress, duration,
     loopMode, isShuffle,
@@ -15,7 +16,8 @@ const GlobalPlayer = () => {
 
   const [isExpanded, setIsExpanded] = useState(false);
 
-  if (!currentTrack) return null;
+  // Cacher le lecteur sur la page de messagerie, mais l'audio continue en background via AudioContext
+  if (!currentTrack || location.pathname === '/messages') return null;
 
   const formatTime = (time) => {
     if (isNaN(time)) return "0:00";
