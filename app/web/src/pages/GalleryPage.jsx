@@ -8,6 +8,7 @@ import Footer from '@/components/Footer.jsx';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import LikersModal from '@/components/LikersModal.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
 import { useAudio } from '@/contexts/AudioContext.jsx';
 import { useDebounce } from '@/hooks/use-debounce.js';
@@ -21,7 +22,10 @@ const GalleryPage = () => {
   const debouncedSearch = useDebounce(search, 500);
   const [typeFilter, setTypeFilter] = useState('all');
   const [sortOption, setSortOption] = useState('trending'); // trending, newest, popular
-  
+
+  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [showLikersModal, setShowLikersModal] = useState(false);
+
   const getFileUrl = (bucket, path) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
@@ -173,6 +177,7 @@ const GalleryPage = () => {
 
       <div className="min-h-screen flex flex-col bg-[#050505]">
         <Header />
+        <LikersModal isOpen={showLikersModal} onClose={() => setShowLikersModal(false)} postId={selectedPostId} />
 
         <main className="flex-grow py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
           <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -301,7 +306,17 @@ const GalleryPage = () => {
                               <span>{item.views} vues</span>
                             ) : (
                               <>
-                                <span className="flex items-center gap-1"><Heart className="w-3 h-3 fill-red-500 text-red-500" /> {item.likes}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSelectedPostId(item.id);
+                                    setShowLikersModal(true);
+                                  }}
+                                  className="flex items-center gap-1 hover:scale-110 transition-transform"
+                                >
+                                  <Heart className="w-3 h-3 fill-red-500 text-red-500" /> {item.likes}
+                                </button>
                                 <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {item.comments}</span>
                               </>
                             )}

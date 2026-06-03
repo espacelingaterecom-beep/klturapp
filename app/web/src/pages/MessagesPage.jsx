@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Search, Send, Paperclip, Smile, Award, ChevronLeft, MoreVertical, MessageSquare, ChevronRight } from 'lucide-react';
+import { Search, Send, Paperclip, Smile, Award, ChevronLeft, MoreVertical, MessageSquare, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
+import { toast } from 'sonner';
 
 const MessagesPage = () => {
   const { currentUser } = useAuth();
@@ -96,6 +98,30 @@ const MessagesPage = () => {
       supabase.removeChannel(channel);
     };
   }, [activeConv, currentUser]);
+
+  const handleDeleteConversation = async () => {
+    if (!activeConv) return;
+
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action est irréversible.")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', activeConv.id);
+
+      if (error) throw error;
+
+      toast.success("Conversation supprimée");
+      setConversations(prev => prev.filter(c => c.id !== activeConv.id));
+      setActiveConv(null);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la suppression");
+    }
+  };
 
   const getFileUrl = (bucket, path) => {
     if (!path) return '';
@@ -277,9 +303,33 @@ const MessagesPage = () => {
                   </div>
                 </div>
                 
-                <Button variant="ghost" size="icon" className="text-white/20 hover:text-white rounded-full">
-                  <MoreVertical className="w-5 h-5" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="text-white/20 hover:text-white rounded-full">
+                      <MoreVertical className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-[#111] border-[#222] text-white align-end">
+                    <DropdownMenuItem
+                      onClick={() => navigate(`/profil/${(activeConv.participant1_id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.id}`)}
+                      className="cursor-pointer"
+                    >
+                      Voir le profil
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-[#222]" />
+                    <DropdownMenuItem
+                      onClick={handleDeleteConversation}
+                      className="text-red-500 cursor-pointer focus:text-red-500"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Supprimer la conversation
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-white/50 cursor-pointer">
+                      <AlertTriangle className="w-4 h-4 mr-2" />
+                      Signaler
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Messages Area */}

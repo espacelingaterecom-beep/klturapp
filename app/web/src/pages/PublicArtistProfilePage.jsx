@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import LikersModal from '@/components/LikersModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
 
@@ -26,6 +27,9 @@ const PublicArtistProfilePage = () => {
   const [stats, setStats] = useState({ views: 0, total: 0, followers: 0, posts: 0, reposts: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
   const [followId, setFollowId] = useState(null);
+
+  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [showLikersModal, setShowLikersModal] = useState(false);
 
   const isOwner = currentUser?.id === userId;
 
@@ -212,6 +216,7 @@ const PublicArtistProfilePage = () => {
       <Helmet><title>{artist?.username || artist?.name || 'Artiste'} - KLTUR RAP</title></Helmet>
       <div className="min-h-screen flex flex-col bg-[#050505]">
         <Header />
+        <LikersModal isOpen={showLikersModal} onClose={() => setShowLikersModal(false)} postId={selectedPostId} />
 
         <main className="flex-grow pb-12 w-full">
           {/* Banner */}
@@ -358,7 +363,17 @@ const PublicArtistProfilePage = () => {
                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">
                             <p className="text-white text-xs line-clamp-3">{post.caption}</p>
                             <div className="flex items-center gap-3 mt-2 text-[10px] text-white/70 font-bold uppercase">
-                              <span className="flex items-center gap-1"><Heart className="w-3 h-3 fill-red-500 text-red-500" /> {post.likes_count || 0}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setSelectedPostId(post.id);
+                                  setShowLikersModal(true);
+                                }}
+                                className="flex items-center gap-1 hover:scale-110 transition-transform"
+                              >
+                                <Heart className="w-3 h-3 fill-red-500 text-red-500" /> {post.likes_count || 0}
+                              </button>
                               <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {post.comments_count || 0}</span>
                               <span className="ml-auto">{new Date(post.created_at).toLocaleDateString()}</span>
                             </div>

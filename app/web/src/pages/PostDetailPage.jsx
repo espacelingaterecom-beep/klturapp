@@ -10,6 +10,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import LikersModal from '@/components/LikersModal.jsx';
 import LoginPromptModal from '@/components/LoginPromptModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
@@ -34,6 +36,8 @@ const PostDetailPage = () => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
+
+  const [showLikersModal, setShowLikersModal] = useState(false);
 
   useEffect(() => {
     const fetchPostData = async () => {
@@ -197,6 +201,7 @@ const PostDetailPage = () => {
       <Helmet><title>Post de {artist?.username || 'Artiste'} - KLTUR RAP</title></Helmet>
       <Header />
       <LoginPromptModal isOpen={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
+      <LikersModal isOpen={showLikersModal} onClose={() => setShowLikersModal(false)} postId={id} />
 
       <main className="flex-grow py-8 px-4">
         <div className="max-w-5xl mx-auto">
@@ -268,10 +273,12 @@ const PostDetailPage = () => {
               <div className="p-6 bg-[#0a0a0a] border-t border-[#222]">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-4">
-                    <button onClick={handleLike} className={`transition-all hover:scale-110 flex items-center gap-1.5 ${isLiked ? 'text-red-500' : 'text-white/60 hover:text-white'}`}>
-                      <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
-                      <span className="text-sm font-bold">{likesCount}</span>
-                    </button>
+                    <div className="flex items-center gap-1.5 group cursor-pointer" onClick={() => setShowLikersModal(true)}>
+                      <button onClick={(e) => { e.stopPropagation(); handleLike(); }} className={`transition-all hover:scale-110 ${isLiked ? 'text-red-500' : 'text-white/60 hover:text-white'}`}>
+                        <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
+                      </button>
+                      <span className="text-sm font-bold text-white/60 group-hover:text-white transition-colors">{likesCount}</span>
+                    </div>
                     <div className="flex items-center gap-1.5 text-white/60">
                       <MessageCircle className="w-6 h-6" />
                       <span className="text-sm font-bold">{comments.length}</span>
