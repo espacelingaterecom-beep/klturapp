@@ -15,3 +15,40 @@ export function getPublicImageUrl(bucket, path) {
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
 }
+
+export function subscribeChat(conversationId, onNewMessage) {
+  const channel = supabase
+    .channel(`conv:${conversationId}:messages`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload) => onNewMessage(payload.new)
+    )
+    .subscribe();
+
+  return () => supabase.removeChannel(channel);
+}
+
+export function subscribePresence(conversationId, userId, onPresenceState) {
+  const channel = supabase.channel(`conv:${conversationId}:presence`, {
+    config: { presence: { key: userId } },
+  });
+
+  channel
+    .on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState();
+      onPresenceState(state);
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({ user_id: userId, joined_at: new Date().toISOString() });
+      }
+    });
+
+  return () => supabase.removeChannel(channel);
+}

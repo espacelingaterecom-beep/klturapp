@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext.jsx';
-import { supabase } from '@/lib/supabaseClient.js';
+import { supabase, subscribeChat, subscribePresence } from '@/lib/supabaseClient.js';
 import { toast } from 'sonner';
 
 const MessagesPage = () => {
@@ -18,6 +18,7 @@ const MessagesPage = () => {
   const [activeConv, setActiveConv] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
 
   useEffect(() => {
     const fetchConvs = async () => {
@@ -75,29 +76,37 @@ const MessagesPage = () => {
     };
     fetchMessages();
 
-    // Realtime subscription
-    const channel = supabase
-      .channel(`conv:${activeConv.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `conversation_id=eq.${activeConv.id}`
-      }, async (payload) => {
-        setMessages(prev => [...prev, payload.new]);
+    // Utilisation du nouveau helper pour le Realtime
+    const unsubscribe = subscribeChat(activeConv.id, async (newMessage) => {
+      setMessages(prev => [...prev, newMessage]);
 
-        // Si on reçoit un message dans la conversation active, on le marque comme lu immédiatement
-        if (payload.new.recipient_id === currentUser.id) {
-          await supabase
-            .from('messages')
-            .update({ is_read: true })
-            .eq('id', payload.new.id);
-        }
-      })
-      .subscribe();
+      // Si on reçoit un message dans la conversation active, on le marque comme lu
+      if (newMessage.recipient_id === currentUser.id) {
+        await supabase
+          .from('messages')
+          .update({ is_read: true })
+          .eq('id', newMessage.id);
+      }
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe();
+    };
+  }, [activeConv, currentUser]);
+
+  useEffect(() => {
+    if (!activeConv || !currentUser) return;
+
+    const otherUserId = activeConv.participant1_id === currentUser.id ? activeConv.participant2_id : activeConv.participant1_id;
+
+    const unsubscribe = subscribePresence(activeConv.id, currentUser.id, (state) => {
+      // On vérifie si l'ID de l'autre utilisateur est présent dans les clés de l'état de présence
+      const onlineUserIds = Object.keys(state);
+      setIsOtherUserOnline(onlineUserIds.includes(otherUserId));
+    });
+
+    return () => {
+      unsubscribe();
     };
   }, [activeConv, currentUser]);
 
@@ -300,7 +309,9 @@ const MessagesPage = () => {
                           return other?.username || other?.name || 'Utilisateur';
                         })()}
                       </h3>
-                      <p className="text-[10px] text-[#D4AF37] font-bold mt-1 uppercase tracking-widest">En ligne</p>
+                      <p className={`text-[10px] font-bold mt-1 uppercase tracking-widest ${isOtherUserOnline ? 'text-[#D4AF37]' : 'text-white/20'}`}>
+                        {isOtherUserOnline ? 'En ligne' : 'Hors ligne'}
+                      </p>
                     </div>
                   </div>
                 </div>
