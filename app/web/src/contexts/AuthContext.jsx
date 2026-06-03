@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient.js';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { Capacitor } from '@capacitor/core';
 
 const AuthContext = createContext();
 
@@ -90,6 +92,34 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  const loginWithGoogle = async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // Flux natif (Android/iOS)
+        const user = await GoogleAuth.signIn();
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: user.authentication.idToken,
+        });
+        if (error) throw error;
+        return data;
+      } else {
+        // Flux Web classique
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
+        if (error) throw error;
+        return data;
+      }
+    } catch (error) {
+      console.error("Google Login Error:", error);
+      throw error;
+    }
+  };
+
   const signup = async (userData) => {
     const { data, error } = await supabase.auth.signUp({
       email: userData.email,
@@ -117,6 +147,7 @@ export const AuthProvider = ({ children }) => {
       currentUser,
       isAuthenticated,
       login,
+      loginWithGoogle,
       signup,
       logout,
       isPremium: currentUser?.is_premium || currentUser?.isPremium || false,

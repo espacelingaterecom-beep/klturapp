@@ -4,6 +4,11 @@
   "webDir": "../../dist/apps/web",
   "bundledWebRuntime": false,
   "plugins": {
+    "GoogleAuth": {
+      "scopes": ["profile", "email"],
+      "serverClientId": "786105872365-b1jh0cl8hqo413kckjnv3jthva96rvqr.apps.googleusercontent.com",
+      "forceCodeForRefreshToken": true
+    },
     "SplashScreen": {
       "launchShowDuration": 3000,
       "launchAutoHide": true,
