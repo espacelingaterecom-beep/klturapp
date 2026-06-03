@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield, WifiOff } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -227,6 +227,11 @@ const Header = () => {
                   <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-white">
                     <Link to="/modifier-profil" className="flex items-center gap-2 font-medium">
                       <Settings className="h-4 w-4" /> Paramètres
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-white">
+                    <Link to="/ma-musique" className="flex items-center gap-2 font-medium">
+                      <WifiOff className="h-4 w-4" /> Mode Hors ligne
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-[#333]" />

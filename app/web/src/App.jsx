@@ -46,6 +46,7 @@ import CreatePostPage from './pages/CreatePostPage.jsx';
 import ProfileEditPage from './pages/ProfileEditPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
+import OfflineMusicPage from './pages/OfflineMusicPage.jsx';
 
 function App() {
   return (
@@ -97,6 +98,7 @@ function App() {
             <Route path="/modifier-profil" element={<ProtectedRoute><ProfileEditPage /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
+            <Route path="/ma-musique" element={<OfflineMusicPage />} />
 
             {/* Catch-all route */}
             <Route path="*" element={

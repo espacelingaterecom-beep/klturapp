@@ -61,7 +61,7 @@ const MessagesPage = () => {
 
         // Marquer la conversation comme lue
         await markConversationRead(activeConv.id, currentUser.id);
-        fetchUnreadCount(currentUser.id);
+        await fetchUnreadCount(currentUser.id);
       } catch (err) {
         console.error(err);
       }
@@ -75,14 +75,14 @@ const MessagesPage = () => {
       // Si on reçoit un message dans la conversation active, on le marque comme lu
       if (newMessage.recipient_id === currentUser.id) {
         await markConversationRead(activeConv.id, currentUser.id);
-        fetchUnreadCount(currentUser.id);
+        await fetchUnreadCount(currentUser.id);
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [activeConv, currentUser]);
+  }, [activeConv, currentUser?.id]);
 
   useEffect(() => {
     if (!activeConv || !currentUser) return;
