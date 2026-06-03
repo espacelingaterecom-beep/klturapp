@@ -103,11 +103,12 @@ export const AuthProvider = ({ children }) => {
       const isChatPage = window.location.pathname === '/messages';
 
       if (type === 'received' && message.is_read === false) {
-        // Incrémenter le compteur de non-lus
-        setUnreadCount((c) => c + 1);
-
-        // Notification visuelle
+        // OPTIMISATION : On n'incrémente que si on n'est PAS sur la page de chat.
+        // La page de chat gère elle-même le marquage "lu" et le refresh précis.
         if (!isChatPage) {
+          setUnreadCount((c) => c + 1);
+
+          // Notification visuelle
           toast("Nouveau message", {
             description: message.content,
             action: {
