@@ -12,8 +12,8 @@ import { useDebounce } from '@/hooks/use-debounce.js';
 const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, currentUser, logout } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
+  const { isAuthenticated, currentUser, logout, unreadCount } = useAuth();
+  const [isOpen = false, setIsOpen] = useState(false);
 
   // Sécurisation des rôles
   const isAdmin = currentUser?.is_admin === true || currentUser?.isAdmin === true;
@@ -180,13 +180,18 @@ const Header = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`text-sm font-bold uppercase transition-all duration-300 ${
+                className={`text-sm font-bold uppercase transition-all duration-300 flex items-center gap-2 ${
                   isActive(item.path)
                     ? 'text-[#D4AF37] gold-glow-text'
                     : 'text-white hover:text-[#D4AF37]'
                 }`}
               >
                 {item.name}
+                {item.name === 'Messages' && unreadCount > 0 && (
+                  <span className="bg-red-600 text-white text-[9px] h-4 w-4 flex items-center justify-center rounded-full animate-pulse">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
@@ -242,7 +247,19 @@ const Header = () => {
               <SheetTitle className="text-[#D4AF37] font-black uppercase text-left mb-8 border-b border-[#222] pb-4">Menu</SheetTitle>
               <div className="flex flex-col gap-6">
                 {navItems.map((item) => (
-                  <Link key={item.path} to={item.path} onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase">{item.name}</Link>
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsOpen(false)}
+                    className="text-lg font-bold uppercase flex items-center justify-between"
+                  >
+                    {item.name}
+                    {item.name === 'Messages' && unreadCount > 0 && (
+                      <span className="bg-red-600 text-white text-[10px] h-5 w-5 flex items-center justify-center rounded-full animate-pulse">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </Link>
                 ))}
                 {isAdmin && <Link to="/admin" onClick={() => setIsOpen(false)} className="text-[#D4AF37] font-bold uppercase flex items-center gap-2"><Shield className="w-5 h-5"/> Administration</Link>}
               </div>

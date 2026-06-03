@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient.js';
+import { supabase, subscribeNotifications } from '@/lib/supabaseClient.js';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { Capacitor } from '@capacitor/core';
+import { toast } from 'sonner';
 
 const AuthContext = createContext();
 
@@ -11,6 +12,8 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
 
   const updateUser = async (session) => {
     try {
@@ -86,6 +89,52 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  // Notifications en temps réel pour les messages
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const unsub = subscribeNotifications(currentUser.id, ({ message, type }) => {
+      const isChatPage = window.location.pathname === '/messages';
+
+      if (type === 'received') {
+        // Incrémenter le compteur de non-lus
+        setUnreadCount((c) => c + 1);
+
+        // Notification visuelle
+        if (!isChatPage) {
+          toast("Nouveau message", {
+            description: message.content,
+            action: {
+              label: "Voir",
+              onClick: () => window.location.href = '/messages'
+            },
+          });
+        }
+      } else if (type === 'sent') {
+        if (!isChatPage) {
+          toast.success("Message envoyé", {
+            description: "Votre message a bien été transmis.",
+            duration: 2000,
+          });
+        }
+      }
+
+      // Ajouter à l'historique des notifications
+      setNotifications((prev) => [
+        {
+          id: message.id,
+          type,
+          content: message.content,
+          created_at: message.created_at,
+          conversation_id: message.conversation_id
+        },
+        ...prev,
+      ]);
+    });
+
+    return () => unsub();
+  }, [currentUser?.id]);
+
   const login = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -150,6 +199,9 @@ export const AuthProvider = ({ children }) => {
       loginWithGoogle,
       signup,
       logout,
+      unreadCount,
+      setUnreadCount,
+      notifications,
       isPremium: currentUser?.is_premium || currentUser?.isPremium || false,
       isAdmin: currentUser?.is_admin || currentUser?.isAdmin || false
     }}>

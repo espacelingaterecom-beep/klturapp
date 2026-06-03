@@ -34,6 +34,41 @@ export function subscribeChat(conversationId, onNewMessage) {
   return () => supabase.removeChannel(channel);
 }
 
+export function subscribeNotifications(myUserId, onNotification) {
+  const channel = supabase.channel(`user:${myUserId}:notifications`);
+
+  channel
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `recipient_id=eq.${myUserId}`,
+      },
+      (payload) => {
+        onNotification({ message: payload.new, type: 'received' });
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `sender_id=eq.${myUserId}`,
+      },
+      (payload) => {
+        onNotification({ message: payload.new, type: 'sent' });
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
 export function subscribePresence(conversationId, userId, onPresenceState) {
   const channel = supabase.channel(`conv:${conversationId}:presence`, {
     config: { presence: { key: userId } },
@@ -51,4 +86,39 @@ export function subscribePresence(conversationId, userId, onPresenceState) {
     });
 
   return () => supabase.removeChannel(channel);
+}
+
+export function subscribeNotifications(myUserId, onNotification) {
+  const channel = supabase.channel(`user:${myUserId}:notifications`);
+
+  channel
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `recipient_id=eq.${myUserId}`,
+      },
+      (payload) => {
+        onNotification({ message: payload.new, type: 'received' });
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `sender_id=eq.${myUserId}`,
+      },
+      (payload) => {
+        onNotification({ message: payload.new, type: 'sent' });
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
