@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
+import { useNavigate } from 'react-router-dom';
 import { Search, Send, Paperclip, Smile, Award, ChevronLeft, MoreVertical, MessageSquare, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,7 @@ import { toast } from 'sonner';
 
 const MessagesPage = () => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
   const [activeConv, setActiveConv] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -309,7 +311,7 @@ const MessagesPage = () => {
                       <MoreVertical className="w-5 h-5" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="bg-[#111] border-[#222] text-white align-end">
+                  <DropdownMenuContent align="end" className="bg-[#111] border-[#222] text-white">
                     <DropdownMenuItem
                       onClick={() => navigate(`/profil/${(activeConv.participant1_id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.id}`)}
                       className="cursor-pointer"
