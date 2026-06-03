@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
@@ -89,24 +89,24 @@ const AdminDashboard = () => {
   const loadAllData = async () => {
     try {
       // 1. Fetch Events
-      const { data: evs } = await supabase.from('events').select('*').order('date', { ascending: true });
-      setEvents(evs || []);
+      const { data: evs, error: eErr } = await supabase.from('events').select('*').order('date', { ascending: true });
+      if (!eErr) setEvents(evs || []);
 
       // 2. Fetch Users
-      const { data: usrs } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      setUsers(usrs || []);
+      const { data: usrs, error: uErr } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (!uErr) setUsers(usrs || []);
 
       // 3. Fetch News
-      const { data: nws } = await supabase.from('news').select('*, profiles:author_id(username)').order('created_at', { ascending: false });
-      setNews(nws || []);
+      const { data: nws, error: nErr } = await supabase.from('news').select('*, profiles:author_id(username)').order('created_at', { ascending: false });
+      if (!nErr) setNews(nws || []);
 
       // 4. Fetch Contents (Uploads & Posts)
       const { data: ups } = await supabase.from('uploads').select('*, profiles:user_id(username)');
       const { data: pts } = await supabase.from('posts').select('*, profiles:user_id(username)');
 
       // 5. Fetch Radio Episodes
-      const { data: radioEvs } = await supabase.from('radio_episodes').select('*').order('created_at', { ascending: false });
-      setRadioEpisodes(radioEvs || []);
+      const { data: radioEvs, error: rErr } = await supabase.from('radio_episodes').select('*').order('created_at', { ascending: false });
+      if (!rErr) setRadioEpisodes(radioEvs || []);
 
       const combined = [
         ...(ups || []).map(u => ({ ...u, contentType: 'Upload' })),
@@ -120,19 +120,14 @@ const AdminDashboard = () => {
       const totalDownloads = (ups || []).reduce((acc, u) => acc + (u.download_count || 0), 0);
       const totalLikes = [...(ups || []), ...(pts || [])].reduce((acc, c) => acc + (c.likes_count || 0), 0);
 
-      // Simple growth data by month (placeholder logic)
-      const growth = [
-        { name: 'Jan', users: 10, content: 5 },
-        { name: 'Feb', users: 25, content: 12 },
-        { name: 'Mar', users: 45, content: 28 },
-        { name: 'Apr', users: 70, content: 35 },
-      ];
-
       setAnalytics({
         totalViews,
         totalDownloads,
         totalLikes,
-        userGrowth: growth,
+        userGrowth: [
+          { name: 'Début', users: 0, content: 0 },
+          { name: 'Actuel', users: usrs?.length || 0, content: combined?.length || 0 }
+        ],
         contentDistribution: [
           { name: 'Musique', value: ups?.length || 0 },
           { name: 'Posts', value: pts?.length || 0 },
@@ -142,7 +137,6 @@ const AdminDashboard = () => {
 
     } catch (e) {
       console.error("Data loading error", e);
-      toast.error("Erreur lors du chargement des données");
     }
   };
 
