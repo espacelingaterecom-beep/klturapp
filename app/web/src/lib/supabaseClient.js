@@ -35,38 +35,40 @@ export function subscribeChat(conversationId, onNewMessage) {
 }
 
 export function subscribeNotifications(myUserId, onNotification) {
-  const channel = supabase.channel(`user:${myUserId}:notifications`);
+  const channel = supabase.channel(`user:${myUserId}:messages-notifs`, {
+    config: { private: true },
+  });
 
-  channel
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `recipient_id=eq.${myUserId}`,
-      },
-      (payload) => {
-        onNotification({ message: payload.new, type: 'received' });
-      }
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `sender_id=eq.${myUserId}`,
-      },
-      (payload) => {
-        onNotification({ message: payload.new, type: 'sent' });
-      }
-    )
-    .subscribe();
+  // Reçus
+  channel.on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `recipient_id=eq.${myUserId}`,
+    },
+    (payload) => {
+      onNotification({ message: payload.new, type: 'received' });
+    }
+  );
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
+  // Envoyés
+  channel.on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `sender_id=eq.${myUserId}`,
+    },
+    (payload) => {
+      onNotification({ message: payload.new, type: 'sent' });
+    }
+  );
+
+  channel.subscribe();
+  return () => supabase.removeChannel(channel);
 }
 
 export function subscribePresence(conversationId, userId, onPresenceState) {
@@ -89,36 +91,38 @@ export function subscribePresence(conversationId, userId, onPresenceState) {
 }
 
 export function subscribeNotifications(myUserId, onNotification) {
-  const channel = supabase.channel(`user:${myUserId}:notifications`);
+  const channel = supabase.channel(`user:${myUserId}:messages-notifs`, {
+    config: { private: true },
+  });
 
-  channel
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `recipient_id=eq.${myUserId}`,
-      },
-      (payload) => {
-        onNotification({ message: payload.new, type: 'received' });
-      }
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `sender_id=eq.${myUserId}`,
-      },
-      (payload) => {
-        onNotification({ message: payload.new, type: 'sent' });
-      }
-    )
-    .subscribe();
+  // Reçus
+  channel.on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `recipient_id=eq.${myUserId}`,
+    },
+    (payload) => {
+      onNotification({ message: payload.new, type: 'received' });
+    }
+  );
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
+  // Envoyés
+  channel.on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `sender_id=eq.${myUserId}`,
+    },
+    (payload) => {
+      onNotification({ message: payload.new, type: 'sent' });
+    }
+  );
+
+  channel.subscribe();
+  return () => supabase.removeChannel(channel);
 }

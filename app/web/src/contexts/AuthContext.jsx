@@ -96,7 +96,7 @@ export const AuthProvider = ({ children }) => {
     const unsub = subscribeNotifications(currentUser.id, ({ message, type }) => {
       const isChatPage = window.location.pathname === '/messages';
 
-      if (type === 'received') {
+      if (type === 'received' && message.is_read === false) {
         // Incrémenter le compteur de non-lus
         setUnreadCount((c) => c + 1);
 
