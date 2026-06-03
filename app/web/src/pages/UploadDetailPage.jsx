@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit } from 'lucide-react';
+import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit, CheckCircle, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -14,17 +14,21 @@ import LoginPromptModal from '@/components/LoginPromptModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { useAudio } from '@/contexts/AudioContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
+import { Capacitor } from '@capacitor/core';
 
 const UploadDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser, isAuthenticated } = useAuth();
-  const { playTrack, currentTrack, isPlaying } = useAudio();
+  const { playTrack, currentTrack, isPlaying, downloadForOffline, removeOffline, offlineTracks } = useAudio();
 
   const [upload, setUpload] = useState(null);
   const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const isDownloaded = upload ? offlineTracks.some(t => t.id === upload.id) : false;
+
   // Interaction states
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [stats, setStats] = useState({ likes: 0, favorites: 0, reposts: 0 });
@@ -238,6 +242,37 @@ const UploadDetailPage = () => {
     }
   };
 
+  const handleOfflineAction = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      toast.error("Le téléchargement hors ligne est réservé à l'application mobile.");
+      return;
+    }
+
+    if (isDownloaded) {
+      if (window.confirm("Supprimer ce morceau de votre stockage hors ligne ?")) {
+        await removeOffline(upload.id);
+        toast.success("Supprimé du mode hors ligne");
+      }
+      return;
+    }
+
+    setIsDownloading(true);
+    const success = await downloadForOffline({
+      id: upload.id,
+      title: upload.title,
+      artist: artist?.name || 'Artiste Inconnu',
+      url: mediaUrl,
+      cover: getFileUrl('covers', upload.cover_art)
+    });
+
+    if (success) {
+      toast.success("Disponible hors ligne !");
+    } else {
+      toast.error("Échec du téléchargement hors ligne.");
+    }
+    setIsDownloading(false);
+  };
+
   const handleDownload = async () => {
     if (!upload) return;
     try {
@@ -388,9 +423,31 @@ const UploadDetailPage = () => {
                         <DropdownMenuItem onClick={() => handleShare('copy')} className="cursor-pointer">Copier le lien</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button onClick={handleDownload} className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-bold">
+                        <Button onClick={handleDownload} className="bg-white/10 text-white hover:bg-white/20 font-bold border border-[#333]">
                       <Download className="w-4 h-4 mr-2" /> {upload.download_count || 0}
                     </Button>
+
+                    {/* Offline Button */}
+                    {Capacitor.isNativePlatform() && (
+                      <Button
+                        onClick={handleOfflineAction}
+                        disabled={isDownloading}
+                        className={`font-bold transition-all ${
+                          isDownloaded
+                            ? 'bg-green-600/20 text-green-500 border border-green-600/50 hover:bg-green-600/30'
+                            : 'bg-[#D4AF37] text-black hover:bg-[#b5952f]'
+                        }`}
+                      >
+                        {isDownloading ? (
+                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                        ) : isDownloaded ? (
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                        ) : (
+                          <WifiOff className="w-4 h-4 mr-2" />
+                        )}
+                        {isDownloaded ? 'Hors ligne' : 'Rendre hors ligne'}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

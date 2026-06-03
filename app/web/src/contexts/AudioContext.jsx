@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
-
 import { supabase } from '@/lib/supabaseClient.js';
+import { OfflineManager } from '@/lib/offlineManager.js';
+import { Capacitor } from '@capacitor/core';
 
 const AudioContext = createContext();
 
@@ -13,8 +14,16 @@ export const AudioProvider = ({ children }) => {
   const [isShuffle, setIsShuffle] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [offlineTracks, setOfflineTracks] = useState([]);
 
   const audioRef = useRef(new Audio());
+
+  // Charger la liste des morceaux hors ligne au démarrage
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      OfflineManager.getDownloadedTracks().then(setOfflineTracks);
+    }
+  }, []);
 
   const registerView = async (trackId) => {
     try {
@@ -51,7 +60,7 @@ export const AudioProvider = ({ children }) => {
     };
   }, [currentTrack]);
 
-  const playTrack = (track, newPlaylist = []) => {
+  const playTrack = async (track, newPlaylist = []) => {
     if (newPlaylist.length > 0) {
       setPlaylist(newPlaylist);
       const index = newPlaylist.findIndex(t => t.id === track.id);
@@ -63,10 +72,39 @@ export const AudioProvider = ({ children }) => {
       return;
     }
 
-    setCurrentTrack(track);
-    audioRef.current.src = track.url;
+    // Gestion du mode hors ligne : Vérifier si le morceau est téléchargé
+    let finalUrl = track.url;
+    const downloaded = offlineTracks.find(t => t.id === track.id);
+
+    if (downloaded && Capacitor.isNativePlatform()) {
+      try {
+        finalUrl = await OfflineManager.getLocalUrl(downloaded.localPath);
+        console.log("Lecture depuis le stockage local:", finalUrl);
+      } catch (e) {
+        console.warn("Échec de lecture locale, tentative via URL réseau", e);
+      }
+    }
+
+    setCurrentTrack({ ...track, isOffline: !!downloaded });
+    audioRef.current.src = finalUrl;
     audioRef.current.play();
     setIsPlaying(true);
+  };
+
+  const downloadForOffline = async (track) => {
+    try {
+      const savedTrack = await OfflineManager.downloadTrack(track);
+      setOfflineTracks(prev => [...prev.filter(t => t.id !== track.id), savedTrack]);
+      return true;
+    } catch (e) {
+      console.error("Erreur lors de la mise hors ligne:", e);
+      return false;
+    }
+  };
+
+  const removeOffline = async (trackId) => {
+    await OfflineManager.deleteTrack(trackId);
+    setOfflineTracks(prev => prev.filter(t => t.id !== trackId));
   };
 
   const togglePlay = () => {
@@ -130,9 +168,10 @@ export const AudioProvider = ({ children }) => {
   return (
     <AudioContext.Provider value={{
       currentTrack, isPlaying, progress, duration,
-      loopMode, isShuffle,
+      loopMode, isShuffle, offlineTracks,
       setLoopMode, setIsShuffle,
-      playTrack, togglePlay, handleNext, handlePrev, seek
+      playTrack, togglePlay, handleNext, handlePrev, seek,
+      downloadForOffline, removeOffline
     }}>
       {children}
     </AudioContext.Provider>
