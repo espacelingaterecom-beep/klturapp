@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
@@ -393,8 +394,20 @@ const AdminDashboard = () => {
     toast.success("Export CSV terminé");
   };
 
-  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-[#D4AF37] font-black text-2xl animate-pulse">KLTUR RAP ADMIN...</div>;
-  if (!isAdmin) return null;
+  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-[#D4AF37] font-black text-2xl animate-pulse uppercase tracking-tighter">Chargement Admin...</div>;
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 text-center">
+        <Shield className="w-20 h-20 text-red-500 mb-6 opacity-20" />
+        <h1 className="text-2xl font-black text-white uppercase mb-2">Accès Refusé</h1>
+        <p className="text-white/40 mb-8 max-w-xs">Vous devez être administrateur pour accéder à cet espace.</p>
+        <Button asChild className="bg-[#D4AF37] text-black font-bold">
+          <Link to="/">Retour à l'accueil</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col">
@@ -820,7 +833,9 @@ const AdminDashboard = () => {
                           <div className="flex items-center gap-4">
                             <Avatar className="h-12 w-12 border-2 border-[#222] group-hover:border-[#D4AF37]/30 transition-all">
                               <AvatarImage src={getPublicImageUrl('avatars', u.avatar || u.profilePhoto)} />
-                              <AvatarFallback className="bg-[#111] text-[#D4AF37] font-black">{u.username?.charAt(0) || u.email?.charAt(0)}</AvatarFallback>
+                              <AvatarFallback className="bg-[#111] text-[#D4AF37] font-black">
+                                {(u.username || u.email || "U").charAt(0).toUpperCase()}
+                              </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
                               <p className="font-black text-white flex items-center gap-1.5">
@@ -1040,7 +1055,9 @@ const AdminDashboard = () => {
                       <div key={admin.id} className="bg-[#111] p-6 rounded-2xl border border-[#222] flex items-center gap-4 group hover:border-[#D4AF37]/50 transition-all">
                          <Avatar className="h-16 w-14 border border-[#333]">
                             <AvatarImage src={getPublicImageUrl('avatars', admin.avatar || admin.profilePhoto)} />
-                            <AvatarFallback className="bg-black text-[#D4AF37] font-black">{admin.username?.charAt(0)}</AvatarFallback>
+                            <AvatarFallback className="bg-black text-[#D4AF37] font-black">
+                               {(admin.username || "A").charAt(0).toUpperCase()}
+                            </AvatarFallback>
                          </Avatar>
                          <div className="flex-grow min-w-0">
                             <h4 className="font-black text-white truncate">{admin.username || admin.name}</h4>
