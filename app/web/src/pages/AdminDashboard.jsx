@@ -49,7 +49,7 @@ const AdminDashboard = () => {
   const [newsImage, setNewsImage] = useState(null);
   const [newsImagePreview, setNewsImagePreview] = useState(null);
 
-  const [newRadio, setNewRadio] = useState({ title: '', description: '', is_external: false, external_url: '' });
+  const [newRadio, setNewRadio] = useState({ title: '', description: '', is_external: false, external_url: '', date: new Date().toISOString().slice(0, 16) });
   const [radioFile, setRadioFile] = useState(null);
 
   // Edit states
@@ -326,6 +326,7 @@ const AdminDashboard = () => {
         is_external: newRadio.is_external,
         audio_url: audioUrl,
         external_url: newRadio.external_url,
+        date: newRadio.date,
         created_at: new Date().toISOString()
       };
 
@@ -333,7 +334,7 @@ const AdminDashboard = () => {
       if (error) throw error;
 
       toast.success("Épisode radio ajouté !");
-      setNewRadio({ title: '', description: '', is_external: false, external_url: '' });
+      setNewRadio({ title: '', description: '', is_external: false, external_url: '', date: new Date().toISOString().slice(0, 16) });
       setRadioFile(null);
       loadAllData();
     } catch (err) {
@@ -983,6 +984,17 @@ const AdminDashboard = () => {
                           <input type="file" id="radioAudio" hidden accept="audio/*" onChange={(e) => setRadioFile(e.target.files[0])} />
                         </div>
                       )}
+
+                      <div className="space-y-2">
+                        <Label className="text-white font-bold text-xs uppercase tracking-widest">Date de l'émission</Label>
+                        <Input
+                          type="datetime-local"
+                          value={newRadio.date}
+                          onChange={e => setNewRadio({...newRadio, date: e.target.value})}
+                          className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] [color-scheme:dark]"
+                          required
+                        />
+                      </div>
 
                       <div className="space-y-2">
                         <Label className="text-white font-bold text-xs uppercase tracking-widest">Description</Label>
