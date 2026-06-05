@@ -4,6 +4,7 @@ import { Search, Newspaper, Youtube, ArrowUpRight, Facebook } from 'lucide-react
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import NewsCard from '@/components/NewsCard.jsx';
+import EventCard from '@/components/EventCard.jsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,52 +14,59 @@ import { OfflineManager } from '@/lib/offlineManager.js';
 import { Capacitor } from '@capacitor/core';
 
 const ActualitesPage = () => {
-  const [news, setNews] = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    const fetchNews = async () => {
+    const fetchData = async () => {
       setLoading(true);
 
       // Charger le cache en premier
       if (Capacitor.isNativePlatform() && !search && filter === 'all') {
-        const cached = await OfflineManager.getFromCache('news');
-        if (cached) setNews(cached);
+        const cached = await OfflineManager.getFromCache('news_combined');
+        if (cached) setItems(cached);
       }
 
       try {
-        let query = supabase
-          .from('news')
-          .select('*')
-          // Afficher si publié ou si la date est nulle (ancienne news)
-          .or(`published_at.lte.${new Date().toISOString()},published_at.is.null`);
+        let newsData = [];
+        let eventsData = [];
 
-        if (filter !== 'all') {
-          query = query.eq('category', filter);
-        }
-
-        if (search) {
-          query = query.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
-        }
-
-        // Tri par date de publication
-        const { data, error } = await query.order('published_at', { ascending: false });
-
-        if (error) {
-          // Si le tri échoue, on récupère les données sans tri
-          const { data: fallbackData } = await supabase
+        // 1. Fetch News
+        if (filter === 'all' || filter !== 'Event') {
+          let newsQuery = supabase
             .from('news')
             .select('*')
-            .lte('published_at', new Date().toISOString());
-          setNews(fallbackData || []);
-        } else {
-          setNews(data || []);
-          // Sauvegarder dans le cache
-          if (Capacitor.isNativePlatform() && !search && filter === 'all') {
-            await OfflineManager.saveToCache('news', data);
-          }
+            .or(`published_at.lte.${new Date().toISOString()},published_at.is.null`);
+
+          if (filter !== 'all') newsQuery = newsQuery.eq('category', filter);
+          if (search) newsQuery = newsQuery.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
+
+          const { data } = await newsQuery.order('published_at', { ascending: false });
+          newsData = (data || []).map(n => ({ ...n, itemType: 'news' }));
+        }
+
+        // 2. Fetch Events (if all or Event filter)
+        if (filter === 'all' || filter === 'Event') {
+          let eventsQuery = supabase.from('events').select('*');
+
+          if (search) eventsQuery = eventsQuery.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+
+          const { data } = await eventsQuery.order('date', { ascending: false });
+          eventsData = (data || []).map(e => ({ ...e, itemType: 'event', published_at: e.date }));
+        }
+
+        // Combine and sort
+        const combined = [...newsData, ...eventsData].sort((a, b) =>
+          new Date(b.published_at || b.created_at) - new Date(a.published_at || a.created_at)
+        );
+
+        setItems(combined);
+
+        // Sauvegarder dans le cache
+        if (Capacitor.isNativePlatform() && !search && filter === 'all') {
+          await OfflineManager.saveToCache('news_combined', combined);
         }
       } catch (err) {
         console.error("Critical News Page Error:", err);
@@ -67,7 +75,7 @@ const ActualitesPage = () => {
       }
     };
 
-    fetchNews();
+    fetchData();
   }, [filter, search]);
 
   const categories = [
@@ -197,18 +205,22 @@ const ActualitesPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[1,2,3].map(i => <Skeleton key={i} className="h-80 rounded-2xl bg-[#0a0a0a]" />)}
           </div>
-        ) : news.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="text-center py-20 bg-[#0a0a0a] rounded-3xl border border-[#222]">
             <Newspaper className="w-12 h-12 text-white/10 mx-auto mb-4" />
-            <p className="text-white/40 font-bold uppercase">Aucun article trouvé</p>
+            <p className="text-white/40 font-bold uppercase">Aucun article ou événement trouvé</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {news.map((item) => (
-              <NewsCard key={item.id} news={{
-                ...item,
-                expand: { authorId: { name: 'Rédaction KLTUR RAP' } }
-              }} />
+            {items.map((item) => (
+              item.itemType === 'news' ? (
+                <NewsCard key={`news-${item.id}`} news={{
+                  ...item,
+                  expand: { authorId: { name: 'Rédaction KLTUR RAP' } }
+                }} />
+              ) : (
+                <EventCard key={`event-${item.id}`} event={item} />
+              )
             ))}
           </div>
         )}
