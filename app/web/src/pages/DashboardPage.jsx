@@ -34,6 +34,7 @@ const DashboardPage = () => {
   const [latestUpload, setLatestUpload] = useState(null);
   const [allComments, setAllComments] = useState([]);
   const [recentComments, setRecentComments] = useState([]);
+  const [payoutHistory, setPayoutHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     total: 0,
@@ -78,7 +79,7 @@ const DashboardPage = () => {
 
       setLoading(true);
       try {
-        const [uploadsResult, followersResult, commentsResult, premiumUsersResult, totalStreamsResult] = await Promise.all([
+        const [uploadsResult, followersResult, commentsResult, premiumUsersResult, totalStreamsResult, payoutsResult] = await Promise.all([
           supabase
             .from('uploads')
             .select('*', { count: 'exact' })
@@ -99,7 +100,12 @@ const DashboardPage = () => {
             .eq('is_premium', true),
           supabase
             .from('uploads')
-            .select('view_count')
+            .select('view_count'),
+          supabase
+            .from('payout_requests')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false })
         ]);
 
         if (uploadsResult.error) throw uploadsResult.error;
@@ -111,6 +117,7 @@ const DashboardPage = () => {
         const validComments = (commentsResult.data || []).filter(c => c.uploads);
         setAllComments(validComments);
         setRecentComments(validComments.slice(0, 5));
+        setPayoutHistory(payoutsResult.data || []);
 
         const totalViews = uploadsData.reduce((acc, curr) => acc + (curr.view_count || 0), 0);
         const totalLikes = uploadsData.reduce((acc, curr) => acc + (curr.likes_count || 0), 0);
@@ -170,7 +177,7 @@ const DashboardPage = () => {
 
     setIsCashoutSubmitting(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('payout_requests')
         .insert([{
           user_id: currentUser.id,
@@ -178,11 +185,14 @@ const DashboardPage = () => {
           phone_number: cashoutPhone,
           method: 'Orange Money',
           status: 'pending'
-        }]);
+        }])
+        .select()
+        .single();
 
       if (error) throw error;
 
       toast.success("Demande de retrait envoyée !");
+      setPayoutHistory([data, ...payoutHistory]);
       setShowCashoutModal(false);
       setCashoutPhone('');
     } catch (err) {
@@ -749,6 +759,45 @@ const DashboardPage = () => {
                              Votre part est proportionnelle à vos écoutes par rapport au total des écoutes de la plateforme.
                              Plus vous êtes écouté, plus la valeur de votre part augmente !
                           </p>
+                       </div>
+                    </div>
+
+                    {/* PAYOUT HISTORY */}
+                    <div className="space-y-6">
+                       <h3 className="text-xl font-black uppercase tracking-tighter">Historique des retraits</h3>
+                       <div className="bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden">
+                          <table className="w-full text-left">
+                             <thead className="bg-[#111] text-[10px] font-black uppercase text-white/40 border-b border-[#222]">
+                                <tr>
+                                   <th className="px-6 py-4">Date</th>
+                                   <th className="px-6 py-4">Montant</th>
+                                   <th className="px-6 py-4">Méthode</th>
+                                   <th className="px-6 py-4">Statut</th>
+                                </tr>
+                             </thead>
+                             <tbody className="divide-y divide-[#222]">
+                                {payoutHistory.length === 0 ? (
+                                   <tr>
+                                      <td colSpan="4" className="px-6 py-10 text-center text-white/20 italic text-sm">Aucun retrait effectué.</td>
+                                   </tr>
+                                ) : payoutHistory.map(p => (
+                                   <tr key={p.id} className="text-sm">
+                                      <td className="px-6 py-4 text-white/60">{new Date(p.created_at).toLocaleDateString()}</td>
+                                      <td className="px-6 py-4 font-bold text-[#D4AF37]">{p.amount.toLocaleString()} FCFA</td>
+                                      <td className="px-6 py-4 text-white/60">{p.method} ({p.phone_number})</td>
+                                      <td className="px-6 py-4">
+                                         <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                                            p.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' :
+                                            p.status === 'completed' ? 'bg-green-500/10 text-green-500' :
+                                            'bg-red-500/10 text-red-500'
+                                         }`}>
+                                            {p.status === 'pending' ? 'En attente' : p.status === 'completed' ? 'Payé' : 'Annulé'}
+                                         </span>
+                                      </td>
+                                   </tr>
+                                ))}
+                             </tbody>
+                          </table>
                        </div>
                     </div>
                   </motion.div>

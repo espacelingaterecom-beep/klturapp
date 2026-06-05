@@ -327,7 +327,7 @@ const ProfileEditPage = () => {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label className="text-white font-bold">Bio</Label>
-                  <span className="text-xs text-white/50">{formData.bio.split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
+                  <span className="text-xs text-white/50">{(formData.bio || "").split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
                 </div>
                 <Textarea 
                   name="bio" value={formData.bio} onChange={handleInputChange} rows={8}

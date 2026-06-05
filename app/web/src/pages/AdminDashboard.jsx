@@ -476,6 +476,12 @@ const AdminDashboard = () => {
 
   const handleUpdatePayoutStatus = async (id, newStatus) => {
     const loadingToast = toast.loading(`Mise à jour du statut...`);
+
+    // Mise à jour locale immédiate pour la réactivité (Optimistic UI)
+    setPayoutRequests(prev => prev.map(p =>
+      p.id === id ? { ...p, status: newStatus } : p
+    ));
+
     try {
       const { error } = await supabase
         .from('payout_requests')
@@ -484,10 +490,11 @@ const AdminDashboard = () => {
 
       if (error) throw error;
       toast.success(`Demande ${newStatus === 'completed' ? 'approuvée' : 'annulée'}`, { id: loadingToast });
-      loadAllData();
     } catch (err) {
       console.error(err);
       toast.error("Erreur lors de la mise à jour", { id: loadingToast });
+      // En cas d'erreur, on recharge les données pour annuler le changement visuel
+      loadAllData();
     }
   };
 
@@ -783,7 +790,7 @@ const AdminDashboard = () => {
                 <div className="md:col-span-2 space-y-2">
                   <div className="flex justify-between items-center">
                     <Label className="text-white/60 font-bold uppercase text-[10px]">Contenu de l'article</Label>
-                    <span className="text-xs text-white/50">{newNews.content.split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
+                    <span className="text-xs text-white/50">{(newNews.content || "").split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
                   </div>
                   <Textarea
                     value={newNews.content}
