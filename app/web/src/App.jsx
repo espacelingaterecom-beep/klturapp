@@ -13,6 +13,7 @@ import IOSInstallPrompt from './components/IOSInstallPrompt.jsx';
 import HomePage from './pages/HomePage.jsx';
 import EcouterPage from './pages/EcouterPage.jsx';
 import EvenementsPage from './pages/EvenementsPage.jsx';
+import EventDetailPage from './pages/EventDetailPage.jsx';
 import ArtistesPage from './pages/ArtistesPage.jsx';
 import ActualitesPage from './pages/ActualitesPage.jsx';
 import VideosPage from './pages/VideosPage.jsx';
@@ -66,6 +67,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/ecouter" element={<EcouterPage />} />
             <Route path="/evenements" element={<EvenementsPage />} />
+            <Route path="/evenements/:id" element={<EventDetailPage />} />
             <Route path="/artistes" element={<ArtistesPage />} />
             <Route path="/actualites" element={<ActualitesPage />} />
             <Route path="/videos" element={<VideosPage />} />

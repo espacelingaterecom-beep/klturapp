@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Award, ArrowRight } from 'lucide-react';
+import { Calendar, Award, ArrowRight, Facebook, Youtube, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient.js';
 
 const NewsCard = ({ news }) => {
@@ -11,20 +11,41 @@ const NewsCard = ({ news }) => {
     return data.publicUrl;
   };
   const isExternal = !!news.source_url;
+  const isFacebook = news.source_url?.includes('facebook.com');
+  const isYoutube = news.source_url?.includes('youtube.com') || news.source_url?.includes('youtu.be');
 
   const CardContent = (
     <div className="bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden hover:border-[#D4AF37] transition-all duration-300 hover:-translate-y-1 flex flex-col h-full">
-      <div className="aspect-video relative overflow-hidden bg-[#111]">
-        {(news.image || news.image_url) && (
+      <div className="aspect-video relative overflow-hidden bg-[#111] flex items-center justify-center">
+        {news.image || news.image_url ? (
           <img
             src={news.image_url || getFileUrl('covers', news.image)}
             alt={news.title}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={(e) => {
+              // Si l'image distante échoue (CORS Facebook), on montre un fallback propre
+              e.target.style.display = 'none';
+              e.target.parentElement.classList.add('bg-blue-900/10');
+            }}
           />
-        )}
-        <div className="absolute top-3 left-3 bg-black/80 backdrop-blur border border-[#333] text-white text-xs font-bold uppercase tracking-wider px-2 py-1 rounded">
+        ) : null}
+
+        {/* Fallback Icons if image missing or blocked */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+          {isFacebook && <Facebook className="w-16 h-16 text-[#1877F2]" />}
+          {isYoutube && <Youtube className="w-16 h-16 text-red-600" />}
+          {!isFacebook && !isYoutube && <Share2 className="w-16 h-16 text-[#D4AF37]" />}
+        </div>
+
+        <div className="absolute top-3 left-3 bg-black/80 backdrop-blur border border-[#333] text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded">
           {news.category}
         </div>
+
+        {isExternal && (
+           <div className="absolute top-3 right-3 bg-[#D4AF37] text-black p-1.5 rounded-full shadow-lg">
+              {isFacebook ? <Facebook className="w-3 h-3 fill-current" /> : isYoutube ? <Youtube className="w-3 h-3 fill-current" /> : <Share2 className="w-3 h-3" />}
+           </div>
+        )}
       </div>
 
       <div className="p-5 flex flex-col flex-grow">

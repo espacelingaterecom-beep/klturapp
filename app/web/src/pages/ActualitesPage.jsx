@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Search, Newspaper, Youtube, ArrowUpRight } from 'lucide-react';
+import { Search, Newspaper, Youtube, ArrowUpRight, Facebook } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import NewsCard from '@/components/NewsCard.jsx';
@@ -32,7 +32,8 @@ const ActualitesPage = () => {
         let query = supabase
           .from('news')
           .select('*')
-          .lte('published_at', new Date().toISOString());
+          // Afficher si publié ou si la date est nulle (ancienne news)
+          .or(`published_at.lte.${new Date().toISOString()},published_at.is.null`);
 
         if (filter !== 'all') {
           query = query.eq('category', filter);
@@ -72,7 +73,9 @@ const ActualitesPage = () => {
   const categories = [
     { id: 'all', name: 'Tous' },
     { id: 'News', name: 'News' },
-    { id: 'Interviews', name: 'Interviews' },
+    { id: 'Interview', name: 'Interviews' },
+    { id: 'Sortie', name: 'Sorties' },
+    { id: 'Event', name: 'Événements' },
     { id: 'Ateliers', name: 'Ateliers' },
     { id: 'Chroniques', name: 'Chroniques' }
   ];
@@ -147,6 +150,44 @@ const ActualitesPage = () => {
 
               <Button className="bg-white text-black hover:bg-white/90 font-black uppercase px-8 h-14 rounded-2xl group-hover:scale-105 transition-transform">
                 S'abonner maintenant <ArrowUpRight className="ml-2 w-5 h-5" />
+              </Button>
+            </div>
+          </a>
+        </motion.div>
+
+        {/* Facebook Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="max-w-7xl mx-auto mb-16"
+        >
+          <a
+            href="https://www.facebook.com/profile.php?id=61556600949652"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group block relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1877F2] to-[#0a0a0a] p-8 md:p-12 border border-white/10"
+          >
+            <div className="absolute top-0 right-0 -mt-12 -mr-12 w-64 h-64 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors" />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="text-center md:text-left">
+                <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
+                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[#1877F2] shadow-lg">
+                    <Facebook className="w-6 h-6 fill-current" />
+                  </div>
+                  <span className="text-white font-black uppercase tracking-[0.3em] text-xs">Communauté KLTUR RAP</span>
+                </div>
+                <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                  Rejoignez-nous sur <br className="hidden md:block" /><span className="text-white/80">Facebook</span>
+                </h2>
+                <p className="text-white/60 font-medium max-w-md">
+                  Suivez le live, participez aux débats et ne manquez aucune annonce de notre communauté grandissante.
+                </p>
+              </div>
+
+              <Button className="bg-white text-[#1877F2] hover:bg-white/90 font-black uppercase px-8 h-14 rounded-2xl group-hover:scale-105 transition-transform border-none">
+                Nous rejoindre <ArrowUpRight className="ml-2 w-5 h-5" />
               </Button>
             </div>
           </a>

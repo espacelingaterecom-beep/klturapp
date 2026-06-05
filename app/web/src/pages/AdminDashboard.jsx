@@ -56,6 +56,59 @@ const AdminDashboard = () => {
   const [editingEvent, setEditingEvent] = useState(null);
   const [editingNews, setEditingNews] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
+
+  const fetchUrlMetadata = async (url) => {
+    if (!url || !url.startsWith('http')) return;
+
+    setIsFetchingMetadata(true);
+    try {
+      // 1. Spécifique YouTube (OEmbed est génial pour ça)
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+        const data = await res.json();
+
+        if (data) {
+          setNewNews(prev => ({
+            ...prev,
+            title: prev.title || data.title,
+            content: prev.content || `Vidéo partagée : ${data.title}`
+          }));
+
+          if (data.thumbnail_url) {
+            setNewsImagePreview(data.thumbnail_url);
+            // On peut tenter de convertir l'image distante en File plus tard si besoin
+            // mais ici on garde au moins la prévisualisation
+          }
+          toast.success("Infos YouTube chargées !");
+          return;
+        }
+      }
+
+      // 2. Pour les autres sites, on tente un scraper basique via un service gratuit (OpenGraph.io ou similaire)
+      // Note: Sans clé API, on peut tenter Microlink (gratuit pour les petits usages)
+      const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
+      const { data } = await res.json();
+
+      if (data) {
+        setNewNews(prev => ({
+          ...prev,
+          title: prev.title || data.title,
+          content: prev.content || data.description
+        }));
+
+        if (data.image?.url) {
+          setNewsImagePreview(data.image.url);
+        }
+        toast.success("Métadonnées récupérées !");
+      }
+    } catch (err) {
+      console.error("Metadata fetch error:", err);
+      // On ne bloque pas l'utilisateur si ça échoue
+    } finally {
+      setIsFetchingMetadata(false);
+    }
+  };
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -148,6 +201,7 @@ const AdminDashboard = () => {
     try {
       let imageUrl = editingNews?.image_url || null;
 
+      // Priorité 1: Image uploadée manuellement
       if (newsImage) {
         const fileExt = newsImage.name.split('.').pop();
         const fileName = `news/${Date.now()}.${fileExt}`;
@@ -156,6 +210,10 @@ const AdminDashboard = () => {
           .upload(fileName, newsImage);
         if (storageError) throw storageError;
         imageUrl = storageData.path;
+      }
+      // Priorité 2: Image détectée via URL (si aucune image manuelle n'est fournie)
+      else if (newsImagePreview && newsImagePreview.startsWith('http')) {
+        imageUrl = newsImagePreview;
       }
 
       const newsData = {
@@ -217,7 +275,7 @@ const AdminDashboard = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      let imageUrl = editingEvent?.image_url || null;
+      let imageUrl = editingEvent?.image || null;
 
       if (eventImage) {
         const fileExt = eventImage.name.split('.').pop();
@@ -235,7 +293,7 @@ const AdminDashboard = () => {
         location: newEvent.location,
         event_type: newEvent.event_type,
         description: newEvent.description,
-        image_url: imageUrl,
+        image: imageUrl,
         organizer_id: currentUser.id
       };
 
@@ -271,7 +329,7 @@ const AdminDashboard = () => {
       event_type: event.event_type || 'Concert',
       description: event.description || ''
     });
-    setEventImagePreview(event.image_url ? getPublicImageUrl('covers', event.image_url) : null);
+    setEventImagePreview(event.image ? getPublicImageUrl('covers', event.image) : null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -295,12 +353,24 @@ const AdminDashboard = () => {
       toast.error("Vous ne pouvez pas retirer vos propres droits admin");
       return;
     }
-    const { error } = await supabase.from('profiles').update({ is_admin: !currentStatus }).eq('id', userId);
-    if (!error) {
-      toast.success(currentStatus ? "Accès admin retiré" : "Nouvel administrateur ajouté !");
-      loadAllData();
-    } else {
-      toast.error("Erreur lors du changement de rôle");
+
+    const loadingToast = toast.loading("Mise à jour du rôle...");
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_admin: !currentStatus })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      toast.success(!currentStatus ? "Nouvel administrateur ajouté !" : "Accès admin retiré", { id: loadingToast });
+
+      // Forcer le rechargement des données
+      await loadAllData();
+    } catch (err) {
+      console.error("Admin toggle error:", err);
+      toast.error(`Erreur: ${err.message || "Action impossible"}`, { id: loadingToast });
     }
   };
 
@@ -362,6 +432,18 @@ const AdminDashboard = () => {
     else {
       toast.success("Événement supprimé");
       loadAllData();
+    }
+  };
+
+  const handleDeleteRadioEpisode = async (id) => {
+    if (!window.confirm("Supprimer cet épisode radio ?")) return;
+    try {
+      const { error } = await supabase.from('radio_episodes').delete().eq('id', id);
+      if (error) throw error;
+      toast.success("Épisode supprimé");
+      loadAllData();
+    } catch (err) {
+      toast.error("Erreur lors de la suppression");
     }
   };
 
@@ -654,8 +736,22 @@ const AdminDashboard = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Lien source (Optionnel - ex: YouTube)</Label>
-                  <Input value={newNews.source_url} onChange={e => setNewNews({...newNews, source_url: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://..." />
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Lien source (Auto-détection activée)</Label>
+                  <div className="relative">
+                    <Input
+                      value={newNews.source_url}
+                      onChange={e => setNewNews({...newNews, source_url: e.target.value})}
+                      onBlur={e => fetchUrlMetadata(e.target.value)}
+                      className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] pr-10"
+                      placeholder="Collez un lien YouTube ou un article..."
+                    />
+                    {isFetchingMetadata && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[8px] text-white/30 italic">L'app tentera de charger le titre et l'image automatiquement.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -787,8 +883,8 @@ const AdminDashboard = () => {
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={ev.id} className="bg-[#0a0a0a] p-6 rounded-3xl border border-[#222] flex flex-col md:flex-row items-center justify-between gap-6 hover:border-[#D4AF37]/30 transition-all group">
                   <div className="flex items-center gap-6 w-full">
                     <div className="h-20 w-20 rounded-2xl overflow-hidden bg-[#111] shrink-0 border border-[#333]">
-                      {ev.image_url ? (
-                        <img src={getPublicImageUrl('covers', ev.image_url)} className="h-full w-full object-cover" alt="" />
+                      {ev.image ? (
+                        <img src={getPublicImageUrl('covers', ev.image)} className="h-full w-full object-cover" alt="" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center text-white/10"><Calendar className="w-8 h-8" /></div>
                       )}
@@ -1030,12 +1126,23 @@ const AdminDashboard = () => {
                          </div>
                       </div>
                       <div className="mt-8 w-full">
-                         <p className="text-[10px] font-black uppercase text-white/30 mb-4 tracking-[0.2em]">Dernières diffusions</p>
-                         <div className="space-y-2">
-                            {radioEpisodes.slice(0, 3).map(ep => (
-                              <div key={ep.id} className="bg-black/40 p-3 rounded-lg border border-white/5 flex justify-between items-center text-left">
-                                 <span className="text-xs font-bold text-white truncate max-w-[150px]">{ep.title}</span>
-                                 <span className="text-[9px] text-white/20 uppercase font-black">{new Date(ep.created_at).toLocaleDateString()}</span>
+                         <p className="text-[10px] font-black uppercase text-white/30 mb-4 tracking-[0.2em]">Historique des diffusions</p>
+                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {radioEpisodes.length === 0 ? (
+                              <p className="text-[10px] text-white/20 italic">Aucun historique</p>
+                            ) : radioEpisodes.map(ep => (
+                              <div key={ep.id} className="bg-black/40 p-3 rounded-lg border border-white/5 flex justify-between items-center text-left group">
+                                 <div className="min-w-0">
+                                    <span className="text-xs font-bold text-white truncate block">{ep.title}</span>
+                                    <span className="text-[9px] text-white/20 uppercase font-black">{new Date(ep.created_at).toLocaleDateString()}</span>
+                                 </div>
+                                 <Button
+                                   variant="ghost"
+                                   onClick={() => handleDeleteRadioEpisode(ep.id)}
+                                   className="h-8 w-8 p-0 text-white/10 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                 >
+                                    <Trash2 className="w-4 h-4" />
+                                 </Button>
                               </div>
                             ))}
                          </div>
@@ -1057,7 +1164,10 @@ const AdminDashboard = () => {
                       <Button variant="outline" className="border-[#333] text-white font-bold" onClick={loadAllData}>
                          Rafraîchir
                       </Button>
-                      <Button className="bg-white text-black hover:bg-white/90 font-bold">
+                      <Button
+                        onClick={() => document.getElementById('promotion-section')?.scrollIntoView({ behavior: 'smooth' })}
+                        className="bg-white text-black hover:bg-white/90 font-bold"
+                      >
                         <Plus className="w-4 h-4 mr-2" /> Recruter Nouveau Staff
                       </Button>
                    </div>
@@ -1090,7 +1200,7 @@ const AdminDashboard = () => {
                    ))}
                 </div>
 
-                <div className="p-8 bg-[#111]/30 border-t border-[#222]">
+                <div id="promotion-section" className="p-8 bg-[#111]/30 border-t border-[#222]">
                    <h4 className="text-xs font-black uppercase tracking-widest text-white/40 mb-4">Promouvoir un membre dans l'équipe</h4>
                    <div className="flex flex-wrap gap-4">
                       {users.filter(u => !u.is_admin).slice(0, 10).map(suggest => (
