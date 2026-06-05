@@ -1,13 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import { Edit2, Upload as UploadIcon, Award, Play, Download, Trash2, Eye, Image as ImageIcon, Globe, Youtube, Facebook, Instagram, Twitter, Video, MessageCircle, Ghost, Music } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  Edit2, Upload as UploadIcon, Award, Play, Download, Trash2, Eye,
+  Image as ImageIcon, Globe, Youtube, Facebook, Instagram, Twitter,
+  Video, MessageCircle, Ghost, Music, BarChart3, TrendingUp, Users,
+  Plus, MessageSquare, ChevronRight, Settings, Info, Share2, Star,
+  LayoutDashboard, ListMusic, PieChart, MessageSquareQuote, ShieldAlert,
+  Wallet, Landmark, Receipt
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip, AreaChart, Area, XAxis, CartesianGrid } from 'recharts';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,14 +27,44 @@ import BannerEditModal from '@/components/BannerEditModal.jsx';
 
 const DashboardPage = () => {
   const { currentUser } = useAuth();
-  const [uploads, setUploads] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ total: 0, views: 0, followers: 0 });
-  const [showBannerModal, setShowBannerModal] = useState(false);
-  const [userProfile, setUserProfile] = useState(currentUser);
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('overview'); // overview, content, analytics, comments, revenues
 
-  // On utilise directement les droits du currentUser fournis par l'AuthContext
+  const [uploads, setUploads] = useState([]);
+  const [latestUpload, setLatestUpload] = useState(null);
+  const [allComments, setAllComments] = useState([]);
+  const [recentComments, setRecentComments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    total: 0,
+    views: 0,
+    followers: 0,
+    likes: 0,
+    downloads: 0,
+    totalPlatformPremiumUsers: 0,
+    totalPlatformPremiumStreams: 0
+  });
+  const [showBannerModal, setShowBannerModal] = useState(false);
+  const [showCashoutModal, setShowCashoutModal] = useState(false);
+  const [cashoutPhone, setCashoutPhone] = useState('');
+  const [isCashoutSubmitting, setIsCashoutSubmitting] = useState(false);
+  const [userProfile, setUserProfile] = useState(currentUser);
+  const [expandedComments, setExpandedComments] = useState({});
+
+  const toggleCommentExpand = (commentId) => {
+    setExpandedComments(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
+
   const isPremium = userProfile?.is_premium || userProfile?.isPremium || false;
+
+  // Analytics data
+  const viewData = [
+    { name: 'Lun', v: 400, d: 20 }, { name: 'Mar', v: 700, d: 45 }, { name: 'Mer', v: 600, d: 30 },
+    { name: 'Jeu', v: 1200, d: 80 }, { name: 'Ven', v: 1100, d: 65 }, { name: 'Sam', v: 1800, d: 120 }, { name: 'Dim', v: 1500, d: 90 }
+  ];
 
   useEffect(() => {
     if (currentUser) {
@@ -36,28 +78,55 @@ const DashboardPage = () => {
 
       setLoading(true);
       try {
-        // Fetch Uploads and Followers in parallel
-        const [uploadsResult, followersResult] = await Promise.all([
+        const [uploadsResult, followersResult, commentsResult, premiumUsersResult, totalStreamsResult] = await Promise.all([
           supabase
             .from('uploads')
             .select('*', { count: 'exact' })
-            .eq('user_id', currentUser.id),
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false }),
           supabase
             .from('followers')
             .select('*', { count: 'exact', head: true })
-            .eq('following_id', currentUser.id)
+            .eq('following_id', currentUser.id),
+          supabase
+            .from('comments')
+            .select('*, profiles:user_id(*), uploads(*)')
+            .eq('uploads.user_id', currentUser.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_premium', true),
+          supabase
+            .from('uploads')
+            .select('view_count')
         ]);
 
         if (uploadsResult.error) throw uploadsResult.error;
         
         const uploadsData = uploadsResult.data || [];
         setUploads(uploadsData);
-        
+        setLatestUpload(uploadsData[0] || null);
+
+        const validComments = (commentsResult.data || []).filter(c => c.uploads);
+        setAllComments(validComments);
+        setRecentComments(validComments.slice(0, 5));
+
         const totalViews = uploadsData.reduce((acc, curr) => acc + (curr.view_count || 0), 0);
+        const totalLikes = uploadsData.reduce((acc, curr) => acc + (curr.likes_count || 0), 0);
+        const totalDownloads = uploadsData.reduce((acc, curr) => acc + (curr.download_count || 0), 0);
+
+        // Calculate global platform stats for revenue
+        const platformPremiumStreams = (totalStreamsResult.data || []).reduce((acc, curr) => acc + (curr.view_count || 0), 0);
+
         setStats({
           total: uploadsResult.count || 0,
           views: totalViews,
-          followers: followersResult.count || 0
+          followers: followersResult.count || 0,
+          likes: totalLikes,
+          downloads: totalDownloads,
+          totalPlatformPremiumUsers: premiumUsersResult.count || 0,
+          totalPlatformPremiumStreams: platformPremiumStreams || 1 // Avoid division by zero
         });
 
       } catch (err) {
@@ -73,13 +142,8 @@ const DashboardPage = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Voulez-vous vraiment supprimer ce projet ?')) return;
     try {
-      const { error } = await supabase
-        .from('uploads')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('uploads').delete().eq('id', id);
       if (error) throw error;
-
       setUploads(prev => prev.filter(item => item.id !== id));
       toast.success('Projet supprimé.');
     } catch (err) {
@@ -87,185 +151,662 @@ const DashboardPage = () => {
     }
   };
 
-  const getBannerStyle = () => {
-    if (userProfile?.banner_style === 'gradient') return { background: 'linear-gradient(to right, #000000, #D4AF37)' };
-    if (userProfile?.banner_style === 'solid') return { background: '#111111' };
-    if (userProfile?.banner_image) {
-      return { backgroundImage: `url(${getPublicImageUrl('covers', userProfile.banner_image)})`, backgroundSize: 'cover', backgroundPosition: 'center' };
-    }
-    return { background: '#111111' }; // default
+  const handleReply = (comment) => {
+    toast.info(`Réponse à @${comment.profiles?.username} bientôt disponible.`);
   };
+
+  const handleCashout = async () => {
+    const estimatedGains = Math.round((stats.views / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000));
+
+    if (estimatedGains < 5000) {
+      toast.error("Le montant minimum de retrait est de 5000 FCFA.");
+      return;
+    }
+
+    if (!cashoutPhone.match(/^[0-9]{8,15}$/)) {
+      toast.error("Veuillez entrer un numéro de téléphone valide.");
+      return;
+    }
+
+    setIsCashoutSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('payout_requests')
+        .insert([{
+          user_id: currentUser.id,
+          amount: estimatedGains,
+          phone_number: cashoutPhone,
+          method: 'Orange Money',
+          status: 'pending'
+        }]);
+
+      if (error) throw error;
+
+      toast.success("Demande de retrait envoyée !");
+      setShowCashoutModal(false);
+      setCashoutPhone('');
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de l'envoi de la demande.");
+    } finally {
+      setIsCashoutSubmitting(false);
+    }
+  };
+
+  const SidebarItem = ({ id, icon: Icon, label }) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+        activeTab === id
+          ? 'bg-[#D4AF37] text-black shadow-lg gold-glow'
+          : 'text-white/40 hover:text-white hover:bg-white/5'
+      }`}
+    >
+      <Icon className="w-5 h-5" />
+      <span className="hidden lg:block">{label}</span>
+    </button>
+  );
 
   return (
     <>
-      <Helmet><title>Dashboard - KLTUR RAP</title></Helmet>
-      <div className="min-h-screen flex flex-col bg-[#050505]">
+      <Helmet><title>Studio - KLTUR RAP</title></Helmet>
+      <div className="min-h-screen flex flex-col bg-[#050505] text-white">
         <Header />
 
-        <main className="flex-grow pb-12 w-full">
-          {/* Banner Section */}
-          <div className="w-full h-[200px] md:h-[300px] relative group" style={getBannerStyle()}>
-            <div className="absolute inset-0 bg-black/40" />
-            {userProfile?.bannerText && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-widest drop-shadow-lg">{userProfile.bannerText}</h2>
-              </div>
-            )}
-            <Button 
-              onClick={() => setShowBannerModal(true)}
-              className="absolute top-4 right-4 bg-black/60 hover:bg-black text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <ImageIcon className="w-4 h-4 mr-2" /> Modifier la bannière
-            </Button>
-          </div>
-
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10">
-            {/* Profile Header */}
-            <div className="bg-[#0a0a0a] rounded-2xl border border-[#222] p-8 mb-8 shadow-2xl">
-              <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-                <Avatar className="h-32 w-32 border-4 border-[#222] bg-[#111]">
-                  <AvatarImage src={userProfile?.avatar ? getPublicImageUrl('avatars', userProfile.avatar) : getPublicImageUrl('avatars', userProfile?.profilePhoto)} />
-                  <AvatarFallback className="text-[#D4AF37] text-4xl font-black">{userProfile?.username?.charAt(0) || 'A'}</AvatarFallback>
-                </Avatar>
-                
-                <div className="flex-grow text-center md:text-left mt-4 md:mt-0">
-                  <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
-                    <h1 className="text-4xl font-black text-white uppercase tracking-tight">{userProfile?.username || userProfile?.name}</h1>
-                    {isPremium && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#D4AF37]/20 border border-[#D4AF37]/50 text-[#D4AF37] text-sm font-bold rounded-full uppercase tracking-wider w-fit mx-auto md:mx-0">
-                        <Award className="w-4 h-4" /> Certifié
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-white/60 mb-6 font-medium">{userProfile?.email}</p>
-                  
-                  {/* Socials */}
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-6">
-                    {userProfile?.website && (
-                      <a href={userProfile.website} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-[#111] border border-[#222] flex items-center justify-center text-white/50 hover:text-[#D4AF37] hover:border-[#D4AF37] transition-all" title="Site Web">
-                        <Globe className="w-4 h-4" />
-                      </a>
-                    )}
-                    {userProfile?.social_links && Object.entries(userProfile.social_links).map(([platform, url]) => {
-                      if (!url) return null;
-
-                      let Icon = Globe;
-                      let color = "hover:text-[#D4AF37]";
-
-                      switch(platform) {
-                        case 'facebook': Icon = Facebook; color = "hover:text-[#1877F2]"; break;
-                        case 'instagram': Icon = Instagram; color = "hover:text-[#E1306C]"; break;
-                        case 'twitter': Icon = Twitter; color = "hover:text-[#1DA1F2]"; break;
-                        case 'youtube': Icon = Youtube; color = "hover:text-[#FF0000]"; break;
-                        case 'tiktok': Icon = Video; color = "hover:text-[#000000]"; break;
-                        case 'snapchat': Icon = Ghost; color = "hover:text-[#FFFC00]"; break;
-                        case 'whatsapp': Icon = MessageCircle; color = "hover:text-[#25D366]"; break;
-                        case 'vimeo': Icon = Video; color = "hover:text-[#1AB7EA]"; break;
-                        case 'spotify': Icon = Music; color = "hover:text-[#1DB954]"; break;
-                        case 'apple_music': Icon = Music; color = "hover:text-[#FA243C]"; break;
-                        case 'deezer': Icon = Music; color = "hover:text-[#FF0000]"; break;
-                        case 'boom_music': Icon = Music; color = "hover:text-[#FFD700]"; break;
-                        case 'amazon_music': Icon = Music; color = "hover:text-[#00A8E1]"; break;
-                        case 'soundcloud': Icon = Music; color = "hover:text-[#FF3300]"; break;
-                      }
-
-                      return (
-                        <a key={platform} href={url} target="_blank" rel="noreferrer" className={`w-8 h-8 rounded-full bg-[#111] border border-[#222] flex items-center justify-center text-white/50 ${color} transition-all`} title={platform.replace('_', ' ')}>
-                          <Icon className="w-4 h-4" />
-                        </a>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                    <Button asChild variant="outline" className="border-[#333] text-white hover:bg-[#222] hover:text-white font-bold">
-                      <Link to="/modifier-profil"><Edit2 className="w-4 h-4 mr-2" /> Éditer le profil</Link>
-                    </Button>
-                    {!isPremium && (
-                      <Button asChild className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-bold">
-                        <Link to="/premium">Devenir Premium</Link>
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Stats Block */}
-                <div className="grid grid-cols-3 gap-4 w-full md:w-auto bg-[#111] p-6 rounded-xl border border-[#333] mt-4 md:mt-0">
-                  <div className="text-center">
-                    <p className="text-3xl font-black text-white">{stats.total}</p>
-                    <p className="text-xs text-white/50 uppercase font-bold mt-1">Projets</p>
-                  </div>
-                  <div className="text-center border-l border-r border-[#333] px-4">
-                    <p className="text-3xl font-black text-white">{stats.views}</p>
-                    <p className="text-xs text-white/50 uppercase font-bold mt-1">Vues</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-black text-white">{stats.followers}</p>
-                    <p className="text-xs text-white/50 uppercase font-bold mt-1">Abonnés</p>
-                  </div>
-                </div>
-              </div>
+        <div className="flex flex-grow h-[calc(100vh-80px)] overflow-hidden">
+          {/* LEFT SIDEBAR (Studio Style) */}
+          <aside className="w-20 lg:w-64 bg-[#0a0a0a] border-r border-[#222] p-4 flex flex-col gap-2 shrink-0">
+            <div className="mb-8 px-2 hidden lg:block">
+              <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Menu Studio</p>
             </div>
 
-            {/* Uploads Section */}
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-black text-white uppercase tracking-tight">Mes Projets</h2>
-              <Button asChild className="bg-white text-black hover:bg-white/90 font-bold">
-                <Link to="/upload"><UploadIcon className="w-4 h-4 mr-2"/> Nouveau Projet</Link>
-              </Button>
+            <SidebarItem id="overview" icon={LayoutDashboard} label="Tableau de bord" />
+            <SidebarItem id="content" icon={ListMusic} label="Contenu" />
+            <SidebarItem id="analytics" icon={PieChart} label="Données analytiques" />
+            <SidebarItem id="comments" icon={MessageSquareQuote} label="Commentaires" />
+            <SidebarItem id="revenues" icon={Wallet} label="Revenus" />
+
+            <div className="mt-auto pt-6 border-t border-[#222] space-y-2">
+              <button
+                onClick={() => navigate('/modifier-profil')}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-white/40 hover:text-[#D4AF37] transition-all font-bold text-sm"
+              >
+                <Settings className="w-5 h-5" />
+                <span className="hidden lg:block">Paramètres</span>
+              </button>
+              <button
+                onClick={() => navigate(`/profil/${currentUser?.id}`)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-white/40 hover:text-[#D4AF37] transition-all font-bold text-sm"
+              >
+                <Globe className="w-5 h-5" />
+                <span className="hidden lg:block">Voir ma page</span>
+              </button>
             </div>
+          </aside>
+
+          {/* MAIN CONTENT AREA */}
+          <main className="flex-grow overflow-y-auto p-6 lg:p-10 custom-scrollbar bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-[#D4AF37]/5 via-transparent to-transparent">
 
             {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[1, 2, 3].map(i => <Skeleton key={i} className="h-64 rounded-xl bg-[#111]" />)}
-              </div>
-            ) : uploads.length === 0 ? (
-              <div className="bg-[#0a0a0a] rounded-xl border border-[#222] p-12 text-center">
-                <UploadIcon className="w-16 h-16 text-white/20 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-white mb-2">Aucun projet</h3>
-                <p className="text-white/50 mb-6">Vous n'avez pas encore partagé de contenu.</p>
-                <Button asChild className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-bold">
-                  <Link to="/upload">Uploader mon premier projet</Link>
-                </Button>
+              <div className="max-w-6xl mx-auto space-y-10">
+                <Skeleton className="h-12 w-64 bg-[#111]" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                   <Skeleton className="h-80 bg-[#111] rounded-2xl" />
+                   <Skeleton className="h-80 bg-[#111] rounded-2xl" />
+                   <Skeleton className="h-80 bg-[#111] rounded-2xl" />
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {uploads.map(upload => (
-                  <motion.div key={upload.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-[#0a0a0a] rounded-xl border border-[#222] overflow-hidden group hover:border-[#D4AF37]/50 transition-colors flex flex-col">
-                    <div className="aspect-video relative overflow-hidden bg-[#111]">
-                      {upload.cover_art && <img src={getPublicImageUrl('covers', upload.cover_art)} alt={upload.title} className="w-full h-full object-cover" />}
-                      <div className="absolute top-2 right-2 bg-black/80 px-2 py-1 rounded text-xs font-bold text-white uppercase tracking-wider backdrop-blur-sm">{upload.type}</div>
-                    </div>
-                    <div className="p-5 flex-grow flex flex-col">
-                      <h3 className="font-bold text-lg text-white mb-1 line-clamp-1">{upload.title}</h3>
-                      <p className="text-sm text-white/50 mb-4">{upload.genre}</p>
-                      <div className="flex items-center gap-4 text-sm text-white/60 font-medium mt-auto pb-4 mb-4 border-b border-[#222]">
-                        <span className="flex items-center gap-1.5"><Eye className="w-4 h-4"/> {upload.view_count || 0}</span>
-                        <span className="flex items-center gap-1.5"><Download className="w-4 h-4"/> {upload.download_count || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Button asChild variant="ghost" size="sm" className="text-[#D4AF37] hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 px-2 font-bold">
-                          <Link to={`/analytics/${upload.id}`}>Analytiques</Link>
+              <AnimatePresence mode="wait">
+                {activeTab === 'overview' && (
+                  <motion.div
+                    key="overview"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="max-w-6xl mx-auto space-y-10"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-3xl font-black uppercase tracking-tighter">Aperçu de la chaîne</h2>
+                      <div className="flex gap-4">
+                        <Button variant="outline" className="border-[#333] font-bold" onClick={() => setShowBannerModal(true)}>Customiser</Button>
+                        <Button asChild className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black uppercase shadow-lg">
+                          <Link to="/upload"><Plus className="w-4 h-4 mr-2" /> Créer</Link>
                         </Button>
-                        <div className="flex gap-2">
-                          <Button size="icon" variant="outline" className="h-8 w-8 border-[#333] bg-transparent text-white/70 hover:text-white hover:bg-[#222]">
-                            <Edit2 className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+                      {/* Latest Upload Card */}
+                      <Card className="bg-[#0a0a0a] border-[#222] text-white shadow-2xl overflow-hidden group">
+                        <CardHeader className="pb-4">
+                          <CardTitle className="text-sm font-black uppercase text-white/40 tracking-widest">Dernière publication</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {latestUpload ? (
+                            <div className="space-y-6">
+                              <div className="aspect-video relative rounded-xl overflow-hidden border border-[#222]">
+                                <img src={getPublicImageUrl('covers', latestUpload.cover_art)} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" alt="" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                                <div className="absolute bottom-3 left-3 right-3">
+                                  <p className="font-bold text-sm truncate">{latestUpload.title}</p>
+                                  <p className="text-[10px] text-white/40 uppercase font-bold mt-1">Publié le {new Date(latestUpload.created_at).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+
+                              <div className="space-y-4 text-xs font-bold uppercase tracking-widest text-white/60">
+                                <div className="flex items-center justify-between">
+                                  <span>Classement par vues</span>
+                                  <span className="text-white">1 / {uploads.length}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span>Vues</span>
+                                  <span className="text-white">{latestUpload.view_count || 0}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span>Taux de clic</span>
+                                  <span className="text-white">8.4%</span>
+                                </div>
+                              </div>
+
+                              <Button asChild variant="secondary" className="w-full bg-[#111] hover:bg-[#1a1a1a] text-[#D4AF37] border border-[#222] font-black uppercase text-[10px] h-12 tracking-widest">
+                                <Link to={`/analytics/${latestUpload.id}`}>Accéder aux stats du son</Link>
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="text-center py-10 opacity-20">Aucun contenu</div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {/* Channel Analytics Card */}
+                      <Card className="bg-[#0a0a0a] border-[#222] text-white shadow-2xl overflow-hidden">
+                        <CardHeader>
+                          <CardTitle className="text-sm font-black uppercase text-white/40 tracking-widest">Statistiques globales</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-8">
+                          <div className="pb-6 border-b border-[#222]">
+                            <p className="text-white/40 text-xs font-bold uppercase mb-1">Abonnés actuels</p>
+                            <h2 className="text-5xl font-black tracking-tighter">{stats.followers}</h2>
+                            <p className="text-green-500 text-[10px] font-black mt-2 flex items-center gap-1 uppercase">
+                              <TrendingUp className="w-3 h-3" /> +12% ce mois-ci
+                            </p>
+                          </div>
+
+                          <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-black text-white/40 uppercase">Vues (28 jrs)</p>
+                                <p className="text-2xl font-black">{stats.views}</p>
+                              </div>
+                              <div className="w-20 h-10">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <AreaChart data={viewData}>
+                                    <Area type="monotone" dataKey="v" stroke="#D4AF37" fill="#D4AF37" fillOpacity={0.1} strokeWidth={2} />
+                                  </AreaChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-black text-white/40 uppercase">Downloads (28 jrs)</p>
+                                <p className="text-2xl font-black">{stats.downloads}</p>
+                              </div>
+                              <div className="w-20 h-10">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <AreaChart data={viewData}>
+                                    <Area type="monotone" dataKey="d" stroke="#fff" fill="#fff" fillOpacity={0.1} strokeWidth={2} />
+                                  </AreaChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                          </div>
+
+                          <Button onClick={() => setActiveTab('analytics')} variant="ghost" className="w-full text-white/40 hover:text-white font-black uppercase text-[10px] h-10 tracking-widest">
+                            Consulter l'analyse de la chaîne
                           </Button>
-                          <Button size="icon" variant="outline" onClick={() => handleDelete(upload.id)} className="h-8 w-8 border-[#333] bg-transparent text-red-400 hover:text-red-500 hover:bg-red-950/30">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                        </CardContent>
+                      </Card>
+
+                      {/* Actions Card */}
+                      <Card className="bg-[#0a0a0a] border-[#222] text-white shadow-2xl">
+                        <CardHeader><CardTitle className="text-sm font-black uppercase tracking-widest">Actions Rapides</CardTitle></CardHeader>
+                        <CardContent className="grid grid-cols-2 gap-4">
+                          <Link to="/upload" className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-[#111] hover:bg-[#1a1a1a] border border-[#222] group transition-all">
+                            <UploadIcon className="w-6 h-6 text-[#D4AF37] group-hover:scale-110 transition-transform" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Uploader</span>
+                          </Link>
+                          <Link to="/creer-post" className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-[#111] hover:bg-[#1a1a1a] border border-[#222] group transition-all">
+                            <ImageIcon className="w-6 h-6 text-[#D4AF37] group-hover:scale-110 transition-transform" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Nouveau Post</span>
+                          </Link>
+                          <Link to="/modifier-profil" className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-[#111] hover:bg-[#1a1a1a] border border-[#222] group transition-all">
+                            <Edit2 className="w-6 h-6 text-[#D4AF37] group-hover:scale-110 transition-transform" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Editer Profil</span>
+                          </Link>
+                          <Link to="/messages" className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-[#111] hover:bg-[#1a1a1a] border border-[#222] group transition-all">
+                            <MessageSquare className="w-6 h-6 text-[#D4AF37] group-hover:scale-110 transition-transform" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Messages</span>
+                          </Link>
+                        </CardContent>
+                      </Card>
+
+                    </div>
+
+                    {/* Recent Comments Card */}
+                    <Card className="bg-[#0a0a0a] border-[#222] text-white shadow-2xl">
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-black uppercase tracking-widest">Commentaires récents</CardTitle>
+                        <button onClick={() => setActiveTab('comments')} className="text-[9px] font-black uppercase text-[#D4AF37] hover:underline">Tout voir</button>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {recentComments.length === 0 ? (
+                            <div className="col-span-2 text-center py-10 opacity-20 italic">Aucun nouveau commentaire</div>
+                          ) : (
+                            recentComments.map(c => (
+                              <div key={c.id} className="flex gap-4 p-4 rounded-2xl bg-[#111] border border-[#222] group hover:border-[#D4AF37]/30 transition-all">
+                                <Avatar className="h-10 w-10 shrink-0 border border-[#333]">
+                                  <AvatarImage src={getPublicImageUrl('avatars', c.profiles?.avatar)} />
+                                  <AvatarFallback className="bg-black text-[#D4AF37] font-black">{c.profiles?.username?.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0 flex-grow">
+                                  <div className="flex justify-between items-start">
+                                    <p className="text-[10px] font-black text-white/40 uppercase mb-1">
+                                      @{c.profiles?.username} <span className="mx-2">•</span> {c.uploads?.title}
+                                    </p>
+                                    <span className="text-[8px] text-white/20">{new Date(c.created_at).toLocaleDateString()}</span>
+                                  </div>
+                                  <div className="relative">
+                                    <p className={`text-xs text-white/80 italic whitespace-pre-wrap transition-all duration-200 ${!expandedComments[c.id] ? 'line-clamp-2' : ''}`}>
+                                      "{c.text}"
+                                    </p>
+                                    {c.text.length > 100 && (
+                                      <button
+                                        onClick={() => toggleCommentExpand(c.id)}
+                                        className="mt-1 text-[#D4AF37] font-bold text-[8px] uppercase tracking-widest hover:underline"
+                                      >
+                                        {expandedComments[c.id] ? 'Voir moins' : 'Lire la suite'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-4 mt-3">
+                                     <button onClick={() => handleReply(c)} className="text-[9px] font-black uppercase text-[#D4AF37] hover:underline">Répondre</button>
+                                     <button className="text-[9px] font-black uppercase text-white/20 hover:text-white">Marquer comme lu</button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
                         </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+
+                {activeTab === 'content' && (
+                  <motion.div
+                    key="content"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="max-w-6xl mx-auto space-y-6"
+                  >
+                    <div className="flex items-center justify-between mb-8">
+                      <h2 className="text-3xl font-black uppercase tracking-tighter">Contenu de la chaîne</h2>
+                      <div className="flex gap-3">
+                         <Input placeholder="Filtrer les vidéos..." className="bg-[#111] border-[#222] h-10 w-64" />
+                         <Button asChild className="bg-[#D4AF37] text-black font-bold h-10 uppercase text-xs">
+                           <Link to="/upload">Uploader</Link>
+                         </Button>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden shadow-2xl">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead className="bg-[#111] text-[10px] font-black uppercase text-white/40 border-b border-[#222]">
+                            <tr>
+                              <th className="px-6 py-4">Projet</th>
+                              <th className="px-6 py-4">Visibilité</th>
+                              <th className="px-6 py-4">Date</th>
+                              <th className="px-6 py-4 text-center">Vues</th>
+                              <th className="px-6 py-4 text-center">Downloads</th>
+                              <th className="px-6 py-4 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#222]">
+                            {uploads.length === 0 ? (
+                              <tr>
+                                <td colSpan="6" className="text-center py-20 opacity-20 italic">Aucun contenu trouvé</td>
+                              </tr>
+                            ) : uploads.map(u => (
+                              <tr key={u.id} className="hover:bg-white/5 transition-colors group">
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-4">
+                                    <img src={getPublicImageUrl('covers', u.cover_art)} className="h-10 w-16 object-cover rounded border border-[#333]" alt="" />
+                                    <div className="min-w-0">
+                                      <span className="text-sm font-bold text-white group-hover:text-[#D4AF37] transition-colors truncate block max-w-[200px]">{u.title}</span>
+                                      <span className="text-[10px] text-white/30 uppercase font-black">{u.genre}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase text-green-500 bg-green-500/10 px-2 py-1 rounded">
+                                    <Globe className="w-3 h-3" /> Publique
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-xs text-white/40">{new Date(u.created_at).toLocaleDateString()}</td>
+                                <td className="px-6 py-4 text-sm font-black text-center">{u.view_count || 0}</td>
+                                <td className="px-6 py-4 text-sm font-black text-center">{u.download_count || 0}</td>
+                                <td className="px-6 py-4 text-right">
+                                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button asChild size="icon" variant="ghost" className="h-8 w-8 hover:text-[#D4AF37]"><Link to={`/analytics/${u.id}`}><BarChart3 className="w-4 h-4"/></Link></Button>
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-white"><Edit2 className="w-4 h-4"/></Button>
+                                      <Button size="icon" variant="ghost" onClick={() => handleDelete(u.id)} className="h-8 w-8 hover:text-red-500"><Trash2 className="w-4 h-4"/></Button>
+                                   </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   </motion.div>
-                ))}
-              </div>
+                )}
+
+                {activeTab === 'analytics' && (
+                   <motion.div
+                     key="analytics"
+                     initial={{ opacity: 0, y: 10 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     exit={{ opacity: 0, y: -10 }}
+                     className="max-w-6xl mx-auto space-y-10"
+                   >
+                     <h2 className="text-3xl font-black uppercase tracking-tighter">Analyse de la chaîne</h2>
+
+                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                           <CardContent className="pt-6">
+                              <p className="text-[10px] font-black uppercase text-white/40 mb-2">Vues totales</p>
+                              <p className="text-3xl font-black">{stats.views}</p>
+                           </CardContent>
+                        </Card>
+                        <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                           <CardContent className="pt-6">
+                              <p className="text-[10px] font-black uppercase text-white/40 mb-2">Téléchargements</p>
+                              <p className="text-3xl font-black">{stats.downloads}</p>
+                           </CardContent>
+                        </Card>
+                        <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                           <CardContent className="pt-6">
+                              <p className="text-[10px] font-black uppercase text-white/40 mb-2">Likes</p>
+                              <p className="text-3xl font-black">{stats.likes}</p>
+                           </CardContent>
+                        </Card>
+                        <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                           <CardContent className="pt-6">
+                              <p className="text-[10px] font-black uppercase text-white/40 mb-2">Abonnés</p>
+                              <p className="text-3xl font-black">{stats.followers}</p>
+                           </CardContent>
+                        </Card>
+                     </div>
+
+                     <Card className="bg-[#0a0a0a] border-[#222] text-white overflow-hidden shadow-2xl">
+                        <CardHeader>
+                           <CardTitle className="text-lg uppercase font-black">Performance sur les 7 derniers jours</CardTitle>
+                        </CardHeader>
+                        <CardContent className="h-[400px]">
+                           <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={viewData}>
+                                 <defs>
+                                    <linearGradient id="colorV" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3}/>
+                                       <stop offset="95%" stopColor="#D4AF37" stopOpacity={0}/>
+                                    </linearGradient>
+                                 </defs>
+                                 <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                                 <XAxis dataKey="name" stroke="#444" fontSize={10} fontWeight="bold" />
+                                 <YAxis stroke="#444" fontSize={10} fontWeight="bold" />
+                                 <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '12px' }} />
+                                 <Area type="monotone" dataKey="v" name="Vues" stroke="#D4AF37" fillOpacity={1} fill="url(#colorV)" strokeWidth={3} />
+                                 <Area type="monotone" dataKey="d" name="Downloads" stroke="#fff" fillOpacity={0} strokeWidth={2} strokeDasharray="5 5" />
+                              </AreaChart>
+                           </ResponsiveContainer>
+                        </CardContent>
+                     </Card>
+                   </motion.div>
+                )}
+
+                {activeTab === 'comments' && (
+                  <motion.div
+                    key="comments"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="max-w-4xl mx-auto space-y-6"
+                  >
+                    <h2 className="text-3xl font-black uppercase tracking-tighter mb-8">Commentaires de la chaîne</h2>
+
+                    <div className="space-y-4">
+                       {allComments.length === 0 ? (
+                         <div className="text-center py-20 opacity-20 italic">Aucun commentaire trouvé sur votre contenu.</div>
+                       ) : allComments.map(c => (
+                         <Card key={c.id} className="bg-[#0a0a0a] border-[#222] text-white hover:border-[#D4AF37]/50 transition-all overflow-hidden group">
+                           <CardContent className="p-6">
+                              <div className="flex gap-4">
+                                 <Avatar className="h-12 w-12 border border-[#222]">
+                                    <AvatarImage src={getPublicImageUrl('avatars', c.profiles?.avatar)} />
+                                    <AvatarFallback className="bg-black text-[#D4AF37] font-black">{c.profiles?.username?.charAt(0)}</AvatarFallback>
+                                 </Avatar>
+                                 <div className="flex-grow min-w-0">
+                                    <div className="flex justify-between items-center mb-2">
+                                       <div>
+                                          <span className="font-black text-white mr-2">@{c.profiles?.username}</span>
+                                          <span className="text-[10px] text-white/30 uppercase font-black">{new Date(c.created_at).toLocaleDateString()}</span>
+                                       </div>
+                                       <span className="text-[8px] font-black uppercase text-[#D4AF37] bg-[#D4AF37]/10 px-2 py-1 rounded">Sur "{c.uploads?.title}"</span>
+                                    </div>
+                                    <div className="relative mb-4">
+                                      <p className={`text-sm text-white/80 leading-relaxed whitespace-pre-wrap transition-all duration-200 ${!expandedComments[c.id] ? 'line-clamp-3' : ''}`}>
+                                        {c.text}
+                                      </p>
+                                      {c.text.length > 150 && (
+                                        <button
+                                          onClick={() => toggleCommentExpand(c.id)}
+                                          className="mt-1 text-[#D4AF37] font-bold text-[9px] uppercase tracking-widest hover:underline"
+                                        >
+                                          {expandedComments[c.id] ? 'Voir moins' : 'Voir plus'}
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-6">
+                                       <button onClick={() => handleReply(c)} className="flex items-center gap-2 text-[10px] font-black uppercase text-white/40 hover:text-[#D4AF37] transition-colors">
+                                          <MessageSquare className="w-3 h-3" /> Répondre
+                                       </button>
+                                       <button className="flex items-center gap-2 text-[10px] font-black uppercase text-white/40 hover:text-red-500 transition-colors">
+                                          <Trash2 className="w-3 h-3" /> Supprimer
+                                       </button>
+                                    </div>
+                                 </div>
+                              </div>
+                           </CardContent>
+                         </Card>
+                       ))}
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'revenues' && (
+                  <motion.div
+                    key="revenues"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="max-w-6xl mx-auto space-y-10"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                      <div>
+                        <h2 className="text-3xl font-black uppercase tracking-tighter">Mes Revenus</h2>
+                        <p className="text-white/40 text-sm font-medium mt-1">Estimation des gains basés sur vos écoutes Premium</p>
+                      </div>
+                      <div className="bg-[#111] border border-[#222] px-6 py-4 rounded-2xl flex items-center gap-4">
+                        <p className="text-[10px] font-black uppercase text-white/30 tracking-widest">Valeur d'une écoute</p>
+                        <p className="text-xl font-black text-[#D4AF37]">
+                          {Math.round((stats.totalPlatformPremiumUsers * 5000 * 0.6) / stats.totalPlatformPremiumStreams)} <span className="text-xs uppercase">CFA</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* GAINS CARD */}
+                    <Card className="bg-[#0a0a0a] border-[#D4AF37]/30 text-white shadow-2xl relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4AF37]/5 rounded-full -mr-32 -mt-32 blur-[100px]" />
+                      <CardContent className="p-10">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                            <div>
+                               <p className="text-white/40 text-xs font-black uppercase tracking-[0.2em] mb-4">Total de vos revenus estimés</p>
+                               <div className="flex items-baseline gap-4 mb-2">
+                                  <h2 className="text-6xl font-black tracking-tighter text-[#D4AF37]">
+                                    {Math.round((stats.views / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000)).toLocaleString()}
+                                  </h2>
+                                  <span className="text-2xl font-black uppercase tracking-widest text-white/20">FCFA</span>
+                               </div>
+                               <p className="text-white/60 text-sm font-medium flex items-center gap-2">
+                                  <TrendingUp className="w-4 h-4 text-green-500" /> +8% par rapport au mois dernier
+                                </p>
+                                <div className="mt-8">
+                                  <Button
+                                    onClick={() => setShowCashoutModal(true)}
+                                    className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black uppercase px-10 h-14 rounded-2xl gold-glow"
+                                  >
+                                    <Wallet className="w-5 h-5 mr-2" /> Demander un retrait
+                                  </Button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6">
+                               <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
+                                  <p className="text-[10px] font-black uppercase text-white/30 mb-2">Écoutes Premium</p>
+                                  <p className="text-2xl font-black">{stats.views}</p>
+                               </div>
+                               <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
+                                  <p className="text-[10px] font-black uppercase text-white/30 mb-2">Part Artiste (60%)</p>
+                                  <p className="text-2xl font-black text-[#D4AF37]">Active</p>
+                               </div>
+                            </div>
+                         </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* DETAILS */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                       <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                          <CardHeader>
+                             <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                                <Users className="w-4 h-4 text-[#D4AF37]" /> Pool Premium
+                             </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                             <p className="text-2xl font-black">{stats.totalPlatformPremiumUsers}</p>
+                             <p className="text-xs text-white/40 mt-1 uppercase font-bold">Abonnés sur KLTUR</p>
+                             <p className="mt-4 text-[10px] text-white/20 font-medium italic">Base de calcul : {stats.totalPlatformPremiumUsers.toLocaleString()} x 5000 CFA</p>
+                          </CardContent>
+                       </Card>
+
+                       <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                          <CardHeader>
+                             <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                                <Landmark className="w-4 h-4 text-[#D4AF37]" /> Fond de distribution
+                             </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                             <p className="text-2xl font-black">{(stats.totalPlatformPremiumUsers * 5000 * 0.6).toLocaleString()}</p>
+                             <p className="text-xs text-white/40 mt-1 uppercase font-bold text-green-500">60% reversé aux artistes</p>
+                          </CardContent>
+                       </Card>
+
+                       <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                          <CardHeader>
+                             <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                                <Receipt className="w-4 h-4 text-[#D4AF37]" /> Prochain Paiement
+                             </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                             <p className="text-2xl font-black">28 Juin 2026</p>
+                             <p className="text-xs text-white/40 mt-1 uppercase font-bold">Via Orange / Moov Money</p>
+                          </CardContent>
+                       </Card>
+                    </div>
+
+                    {/* INFO BOX */}
+                    <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 p-8 rounded-3xl flex gap-6 items-start">
+                       <Info className="w-6 h-6 text-[#D4AF37] shrink-0 mt-1" />
+                       <div>
+                          <h4 className="font-black text-white uppercase tracking-wider mb-2">Comment sont calculés vos revenus ?</h4>
+                          <p className="text-white/60 text-sm leading-relaxed max-w-3xl">
+                             Votre rémunération dépend du volume total d'abonnements premium sur la plateforme.
+                             Nous prélevons <strong>60% des revenus totaux</strong> que nous redistribuons équitablement entre tous les artistes.
+                             Votre part est proportionnelle à vos écoutes par rapport au total des écoutes de la plateforme.
+                             Plus vous êtes écouté, plus la valeur de votre part augmente !
+                          </p>
+                       </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             )}
-          </div>
-        </main>
-        <Footer />
+          </main>
+        </div>
       </div>
       <BannerEditModal isOpen={showBannerModal} onClose={() => setShowBannerModal(false)} onUpdate={setUserProfile} />
+
+      {/* Cashout Modal */}
+      <Dialog open={showCashoutModal} onOpenChange={setShowCashoutModal}>
+        <DialogContent className="bg-[#0a0a0a] border-[#222] text-white">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-[#D4AF37]">Retrait Orange Money</DialogTitle>
+            <DialogDescription className="text-white/40">
+              Veuillez saisir votre numéro de téléphone pour recevoir vos gains.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6 space-y-6">
+             <div className="bg-[#111] p-4 rounded-xl border border-[#222] flex items-center justify-between">
+                <span className="text-sm font-bold text-white/60 uppercase">Montant à retirer</span>
+                <span className="text-xl font-black text-[#D4AF37]">
+                  {Math.round((stats.views / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000)).toLocaleString()} FCFA
+                </span>
+             </div>
+
+             <div className="space-y-2">
+                <Label className="text-xs font-black uppercase text-white/40">Numéro Orange Money</Label>
+                <div className="relative">
+                   <Input
+                      value={cashoutPhone}
+                      onChange={(e) => setCashoutPhone(e.target.value)}
+                      className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] pl-10"
+                      placeholder="00236..."
+                   />
+                   <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" className="w-5 h-5" alt="Orange" />
+                   </div>
+                </div>
+                <p className="text-[10px] text-white/20 italic">Vérifiez bien votre numéro avant de valider.</p>
+             </div>
+          </div>
+
+          <DialogFooter>
+             <Button variant="ghost" onClick={() => setShowCashoutModal(false)} className="text-white/40">Annuler</Button>
+             <Button
+               onClick={handleCashout}
+               disabled={isCashoutSubmitting}
+               className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black uppercase px-8"
+             >
+               {isCashoutSubmitting ? 'Traitement...' : 'Confirmer le retrait'}
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

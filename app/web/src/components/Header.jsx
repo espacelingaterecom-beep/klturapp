@@ -205,6 +205,7 @@ const Header = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger className="flex items-center gap-2 outline-none group">
                   <Avatar className="h-10 w-10 border-2 border-transparent group-hover:border-[#D4AF37] transition-colors">
+                    <AvatarImage src={getPublicImageUrl('avatars', currentUser?.avatar || currentUser?.profilePhoto)} />
                     <AvatarFallback className="bg-[#222] text-[#D4AF37] font-bold">
                       {currentUser?.username?.charAt(0) || 'U'}
                     </AvatarFallback>

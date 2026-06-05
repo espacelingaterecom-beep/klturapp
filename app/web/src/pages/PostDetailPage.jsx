@@ -38,6 +38,14 @@ const PostDetailPage = () => {
   const [postingComment, setPostingComment] = useState(false);
 
   const [showLikersModal, setShowLikersModal] = useState(false);
+  const [expandedComments, setExpandedComments] = useState({});
+
+  const toggleCommentExpand = (commentId) => {
+    setExpandedComments(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
 
   useEffect(() => {
     const fetchPostData = async () => {
@@ -261,7 +269,19 @@ const PostDetailPage = () => {
                             <span className="font-bold text-xs text-[#D4AF37]">{comment.profiles?.username}</span>
                             <span className="text-[10px] text-white/30">{new Date(comment.created_at).toLocaleDateString()}</span>
                           </div>
-                          <p className="text-sm text-white/80">{comment.text}</p>
+                          <div className="relative">
+                            <p className={`text-sm text-white/80 whitespace-pre-wrap transition-all duration-200 ${!expandedComments[comment.id] ? 'line-clamp-3' : ''}`}>
+                              {comment.text}
+                            </p>
+                            {comment.text.length > 150 && (
+                              <button
+                                onClick={() => toggleCommentExpand(comment.id)}
+                                className="mt-1 text-[#D4AF37] font-bold text-[9px] uppercase tracking-widest hover:underline"
+                              >
+                                {expandedComments[comment.id] ? 'Voir moins' : 'Voir plus'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))

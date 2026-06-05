@@ -65,6 +65,25 @@ const EventDetailPage = () => {
     }
   };
 
+  const handleAddToCalendar = () => {
+    if (!event) return;
+
+    const title = encodeURIComponent(event.title);
+    const description = encodeURIComponent(event.description || '');
+    const location = encodeURIComponent(event.location || '');
+
+    // Format date for Google Calendar: YYYYMMDDTHHMMSSZ
+    const startDate = new Date(event.date);
+    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // Default duration 2 hours
+
+    const formatCalDate = (date) => date.toISOString().replace(/-|:|\.\d+/g, '');
+
+    const googleUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${description}&location=${location}&dates=${formatCalDate(startDate)}/${formatCalDate(endDate)}`;
+
+    window.open(googleUrl, '_blank');
+    toast.success("Redirection vers Google Calendar...");
+  };
+
   if (loading) return <div className="min-h-screen bg-[#050505] flex flex-col"><Header /><main className="flex-grow py-12 px-4 max-w-7xl mx-auto w-full"><Skeleton className="h-[500px] w-full bg-[#111] rounded-3xl"/></main><Footer /></div>;
   if (!event) return <div className="min-h-screen bg-[#050505] flex flex-col"><Header /><div className="text-white text-center py-20 flex-grow">Événement introuvable</div><Footer /></div>;
 
@@ -141,13 +160,13 @@ const EventDetailPage = () => {
                       <Info className="w-5 h-5 text-[#D4AF37]" /> À propos de l'événement
                     </h3>
                     <div className="relative">
-                      <p className={`text-white/70 leading-relaxed whitespace-pre-wrap ${!isDescExpanded ? 'line-clamp-4 md:line-clamp-none' : ''}`}>
+                      <p className={`text-white/70 leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isDescExpanded ? 'line-clamp-6' : ''}`}>
                         {event.description || "Aucune description détaillée fournie pour cet événement."}
                       </p>
-                      {event.description && event.description.length > 200 && (
+                      {event.description && event.description.length > 350 && (
                         <button
                           onClick={() => setIsDescExpanded(!isDescExpanded)}
-                          className="mt-2 text-[#D4AF37] font-bold text-xs uppercase tracking-widest md:hidden"
+                          className="mt-3 text-[#D4AF37] font-black text-[10px] uppercase tracking-widest hover:underline"
                         >
                           {isDescExpanded ? 'Voir moins' : 'Lire la suite'}
                         </button>
@@ -156,13 +175,20 @@ const EventDetailPage = () => {
                   </div>
                 </div>
 
-                <div className="p-6 bg-[#111] border-t border-[#222] flex items-center justify-between">
-                   <div className="flex items-center gap-4">
+                <div className="p-6 bg-[#111] border-t border-[#222] flex flex-col sm:flex-row items-center justify-between gap-4">
+                   <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
                       <Button
                         onClick={() => isAuthenticated ? setShowRegModal(true) : setShowLoginPrompt(true)}
-                        className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black uppercase px-8 h-12 rounded-xl shadow-lg"
+                        className="w-full sm:w-auto bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black uppercase px-8 h-12 rounded-xl shadow-lg"
                       >
                         Participer à l'événement
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleAddToCalendar}
+                        className="w-full sm:w-auto border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black font-bold h-12 rounded-xl"
+                      >
+                        Ajouter au calendrier
                       </Button>
                    </div>
 

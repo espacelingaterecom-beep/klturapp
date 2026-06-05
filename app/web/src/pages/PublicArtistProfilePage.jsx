@@ -247,15 +247,15 @@ const PublicArtistProfilePage = () => {
                   
                   {artist?.bio && (
                     <div className="mb-6 relative">
-                      <p className={`text-white/80 max-w-2xl leading-relaxed transition-all duration-300 ${!isBioExpanded ? 'line-clamp-2 md:line-clamp-none' : ''}`}>
+                      <p className={`text-white/80 max-w-2xl leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isBioExpanded ? 'line-clamp-3' : ''}`}>
                         {artist.bio}
                       </p>
-                      {artist.bio.length > 100 && (
+                      {artist.bio.length > 200 && (
                         <button
                           onClick={() => setIsBioExpanded(!isBioExpanded)}
-                          className="mt-1 text-[#D4AF37] font-bold text-[10px] uppercase tracking-widest md:hidden"
+                          className="mt-2 text-[#D4AF37] font-black text-[10px] uppercase tracking-widest hover:underline"
                         >
-                          {isBioExpanded ? 'Voir moins' : 'Lire la bio'}
+                          {isBioExpanded ? 'Voir moins' : 'Lire la bio complète'}
                         </button>
                       )}
                     </div>

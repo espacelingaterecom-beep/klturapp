@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, BarChart3, Newspaper, Radio, Trophy, Settings, TrendingUp, DollarSign, FileSpreadsheet, FileText, DownloadCloud } from 'lucide-react';
+import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, BarChart3, Newspaper, Radio, Trophy, Settings, TrendingUp, DollarSign, FileSpreadsheet, FileText, DownloadCloud, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import Header from '@/components/Header.jsx';
@@ -32,6 +32,7 @@ const AdminDashboard = () => {
   const [contents, setContents] = useState([]);
   const [news, setNews] = useState([]);
   const [radioEpisodes, setRadioEpisodes] = useState([]);
+  const [payoutRequests, setPayoutRequests] = useState([]);
   const [analytics, setAnalytics] = useState({
     totalViews: 0,
     totalDownloads: 0,
@@ -162,6 +163,13 @@ const AdminDashboard = () => {
       // 5. Fetch Radio Episodes
       const { data: radioEvs, error: rErr } = await supabase.from('radio_episodes').select('*').order('created_at', { ascending: false });
       if (!rErr) setRadioEpisodes(radioEvs || []);
+
+      // 6. Fetch Payout Requests
+      const { data: payouts, error: pErr } = await supabase
+        .from('payout_requests')
+        .select('*, profiles:user_id(username, email, avatar)')
+        .order('created_at', { ascending: false });
+      if (!pErr) setPayoutRequests(payouts || []);
 
       const combined = [
         ...(ups || []).map(u => ({ ...u, contentType: 'Upload' })),
@@ -333,6 +341,25 @@ const AdminDashboard = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleUpdateRadioSettings = async (e) => {
+    e.preventDefault();
+    const liveUrl = e.target.liveUrl.value;
+    if (!liveUrl) return;
+
+    const loadingToast = toast.loading("Mise à jour du direct...");
+    try {
+      const { error } = await supabase
+        .from('platform_settings')
+        .upsert({ id: 'radio_live', value: liveUrl }, { onConflict: 'id' });
+
+      if (error) throw error;
+      toast.success("Le lien de la radio en direct a été mis à jour !", { id: loadingToast });
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la mise à jour", { id: loadingToast });
+    }
+  };
+
   const cancelEdit = () => {
     setEditingEvent(null);
     setNewEvent({ title: '', date: '', location: '', event_type: 'Concert', description: '' });
@@ -444,6 +471,23 @@ const AdminDashboard = () => {
       loadAllData();
     } catch (err) {
       toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  const handleUpdatePayoutStatus = async (id, newStatus) => {
+    const loadingToast = toast.loading(`Mise à jour du statut...`);
+    try {
+      const { error } = await supabase
+        .from('payout_requests')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success(`Demande ${newStatus === 'completed' ? 'approuvée' : 'annulée'}`, { id: loadingToast });
+      loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la mise à jour", { id: loadingToast });
     }
   };
 
@@ -566,8 +610,14 @@ const AdminDashboard = () => {
             <TabsTrigger value="radio" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
               <Radio className="w-4 h-4 mr-2" /> Radio
             </TabsTrigger>
+            <TabsTrigger value="payouts" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <Wallet className="w-4 h-4 mr-2" /> Retraits
+            </TabsTrigger>
             <TabsTrigger value="team" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
               <Shield className="w-4 h-4 mr-2" /> Équipe
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <Settings className="w-4 h-4 mr-2" /> Paramètres
             </TabsTrigger>
           </TabsList>
 
@@ -731,8 +781,16 @@ const AdminDashboard = () => {
                 </div>
 
                 <div className="md:col-span-2 space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Contenu de l'article</Label>
-                  <Textarea value={newNews.content} onChange={e => setNewNews({...newNews, content: e.target.value})} className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[150px] resize-none" placeholder="Rédigez votre article ici..." />
+                  <div className="flex justify-between items-center">
+                    <Label className="text-white/60 font-bold uppercase text-[10px]">Contenu de l'article</Label>
+                    <span className="text-xs text-white/50">{newNews.content.split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
+                  </div>
+                  <Textarea
+                    value={newNews.content}
+                    onChange={e => setNewNews({...newNews, content: e.target.value})}
+                    className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[300px] resize-none whitespace-pre-wrap"
+                    placeholder="Rédigez votre article ici (Max 1000 mots)..."
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -1152,6 +1210,97 @@ const AdminDashboard = () => {
              </div>
           </TabsContent>
 
+          {/* PAYOUTS TAB */}
+          <TabsContent value="payouts" className="outline-none">
+             <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] overflow-hidden">
+                <div className="p-8 border-b border-[#222] flex justify-between items-center">
+                   <div>
+                      <h3 className="text-xl font-bold text-white uppercase tracking-tight">Demandes de Retrait</h3>
+                      <p className="text-sm text-white/40">Gérez les paiements Orange Money en attente.</p>
+                   </div>
+                   <div className="bg-[#111] px-6 py-3 rounded-2xl border border-[#222]">
+                      <p className="text-xl font-black text-[#D4AF37]">
+                        {payoutRequests.filter(r => r.status === 'pending').reduce((acc, r) => acc + r.amount, 0).toLocaleString()} <span className="text-[10px] uppercase">CFA</span>
+                      </p>
+                      <p className="text-[10px] text-white/40 uppercase font-bold">Total en attente</p>
+                   </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                   <table className="w-full text-left">
+                      <thead className="bg-[#111] text-[10px] font-black uppercase tracking-widest text-white/40 border-b border-[#222]">
+                         <tr>
+                            <th className="px-8 py-6">Artiste</th>
+                            <th className="px-8 py-6">Montant</th>
+                            <th className="px-8 py-6">Coordonnées</th>
+                            <th className="px-8 py-6">Statut</th>
+                            <th className="px-8 py-6 text-right">Actions</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#222]">
+                         {payoutRequests.length === 0 ? (
+                            <tr>
+                               <td colSpan="5" className="px-8 py-20 text-center text-white/20 italic">Aucune demande de retrait enregistrée.</td>
+                            </tr>
+                         ) : payoutRequests.map(p => (
+                            <tr key={p.id} className="hover:bg-white/5 transition-colors group">
+                               <td className="px-8 py-5">
+                                  <div className="flex items-center gap-4">
+                                     <Avatar className="h-10 w-10 border border-[#222]">
+                                        <AvatarImage src={getPublicImageUrl('avatars', p.profiles?.avatar)} />
+                                        <AvatarFallback className="bg-black text-[#D4AF37] font-black">{p.profiles?.username?.charAt(0)}</AvatarFallback>
+                                     </Avatar>
+                                     <div className="min-w-0">
+                                        <p className="font-bold text-white truncate">@{p.profiles?.username}</p>
+                                        <p className="text-[10px] text-white/40 truncate">{p.profiles?.email}</p>
+                                     </div>
+                                  </div>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <span className="text-lg font-black text-[#D4AF37]">{p.amount.toLocaleString()} FCFA</span>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <div className="flex items-center gap-2">
+                                     <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" className="w-4 h-4" alt="Orange" />
+                                     <span className="font-bold text-white/80">{p.phone_number}</span>
+                                  </div>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <span className={`text-[9px] font-black uppercase px-2 py-1 rounded ${
+                                     p.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
+                                     p.status === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                     'bg-red-500/10 text-red-500 border border-red-500/20'
+                                  }`}>
+                                     {p.status === 'pending' ? 'En attente' : p.status === 'completed' ? 'Payé' : 'Annulé'}
+                                  </span>
+                               </td>
+                               <td className="px-8 py-5 text-right">
+                                  {p.status === 'pending' && (
+                                     <div className="flex justify-end gap-2">
+                                        <Button
+                                          onClick={() => handleUpdatePayoutStatus(p.id, 'completed')}
+                                          className="bg-green-600 hover:bg-green-700 text-white font-bold h-9 px-4 rounded-xl text-[10px] uppercase"
+                                        >
+                                          Valider Paiement
+                                        </Button>
+                                        <Button
+                                          onClick={() => handleUpdatePayoutStatus(p.id, 'cancelled')}
+                                          variant="ghost"
+                                          className="text-red-500 hover:bg-red-500/10 font-bold h-9 px-4 rounded-xl text-[10px] uppercase"
+                                        >
+                                          Annuler
+                                        </Button>
+                                     </div>
+                                  )}
+                               </td>
+                            </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+          </TabsContent>
+
           {/* TEAM TAB */}
           <TabsContent value="team" className="outline-none">
              <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] overflow-hidden">
@@ -1221,6 +1370,44 @@ const AdminDashboard = () => {
                    </div>
                 </div>
              </div>
+          </TabsContent>
+
+          {/* SETTINGS TAB */}
+          <TabsContent value="settings" className="outline-none">
+            <div className="max-w-3xl mx-auto space-y-8">
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader>
+                  <CardTitle className="text-xl font-black uppercase tracking-tight text-[#D4AF37]">Configuration Radio Live</CardTitle>
+                  <CardDescription className="text-white/40">Définissez l'URL du flux audio qui sera diffusé en direct sur toute l'application.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleUpdateRadioSettings} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase text-white/60">Lien du flux (Icecast/Radio.co/YouTube)</Label>
+                      <Input name="liveUrl" className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://stream.radio.co/..." required />
+                    </div>
+                    <Button type="submit" className="w-full bg-[#D4AF37] text-black font-black uppercase h-12 rounded-xl">Mettre à jour le direct</Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader>
+                  <CardTitle className="text-xl font-black uppercase tracking-tight">Maintenance</CardTitle>
+                  <CardDescription className="text-white/40">Outils de nettoyage et de gestion système.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-red-500/5 border border-red-500/10">
+                    <div>
+                      <p className="font-bold text-red-500">Mode Maintenance</p>
+                      <p className="text-[10px] text-white/40 uppercase">Désactiver l'accès public à l'app</p>
+                    </div>
+                    <Button variant="destructive" size="sm" className="font-bold">Activer</Button>
+                  </div>
+                  <Button variant="outline" className="w-full border-[#333] text-white/40 hover:text-white font-bold" onClick={() => loadAllData()}>Rafraîchir tout le système</Button>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>

@@ -216,8 +216,15 @@ const UploadPage = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-white font-bold">Description</Label>
-                    <Textarea name="description" value={formData.description} onChange={handleInputChange} rows={4} className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37] resize-none" placeholder="Racontez l'histoire de ce projet..." />
+                    <div className="flex justify-between items-center">
+                      <Label className="text-white font-bold">Description</Label>
+                      <span className="text-xs text-white/50">{formData.description.split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
+                    </div>
+                    <Textarea
+                      name="description" value={formData.description} onChange={handleInputChange} rows={8}
+                      className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37] resize-none"
+                      placeholder="Racontez l'histoire de ce projet (Max 1000 mots)..."
+                    />
                   </div>
                 </div>
 

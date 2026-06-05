@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Search, Filter, Calendar } from 'lucide-react';
+import { MapPin, Search, Filter, Calendar } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import EventCard from '@/components/EventCard.jsx';
@@ -18,13 +18,19 @@ const EvenementsPage = () => {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 500);
   const [typeFilter, setTypeFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
+
+  const cities = [
+    'Bangui', 'Bimbo', 'Berbérati', 'Carnot', 'Bambari',
+    'Bouar', 'Bossangoa', 'Bria', 'Bangassou', 'Nola'
+  ];
 
   useEffect(() => {
     const fetchEvents = async () => {
       setLoading(true);
 
       // Charger le cache en premier sur mobile pour la réactivité
-      if (Capacitor.isNativePlatform() && !search && typeFilter === 'all') {
+      if (Capacitor.isNativePlatform() && !search && typeFilter === 'all' && cityFilter === 'all') {
         const cached = await OfflineManager.getFromCache('events');
         if (cached) setEvents(cached);
       }
@@ -36,11 +42,15 @@ const EvenementsPage = () => {
           .order('date', { ascending: true });
 
         if (debouncedSearch) {
-          query = query.or(`title.ilike.%${debouncedSearch}%,location.ilike.%${debouncedSearch}%`);
+          query = query.or(`title.ilike.%${debouncedSearch}%,location.ilike.%${debouncedSearch}%,city.ilike.%${debouncedSearch}%`);
         }
 
         if (typeFilter !== 'all') {
           query = query.eq('event_type', typeFilter);
+        }
+
+        if (cityFilter !== 'all') {
+          query = query.eq('city', cityFilter);
         }
 
         const { data, error } = await query;
@@ -65,18 +75,17 @@ const EvenementsPage = () => {
         setEvents(sorted);
 
         // Sauvegarder dans le cache pour le mode hors ligne (seulement si vue par défaut)
-        if (Capacitor.isNativePlatform() && !search && typeFilter === 'all') {
+        if (Capacitor.isNativePlatform() && !search && typeFilter === 'all' && cityFilter === 'all') {
           await OfflineManager.saveToCache('events', sorted);
         }
       } catch (err) {
         console.error(err);
-        // Si erreur (offline), le cache est déjà affiché
       } finally {
         setLoading(false);
       }
     };
     fetchEvents();
-  }, [debouncedSearch, typeFilter]);
+  }, [debouncedSearch, typeFilter, cityFilter]);
 
   return (
     <>
@@ -91,7 +100,7 @@ const EvenementsPage = () => {
             <p className="text-white/60 text-lg">Ne manquez aucun concert, battle ou atelier.</p>
           </div>
 
-          <div className="bg-[#0a0a0a] rounded-2xl border border-[#222] p-4 mb-8 flex flex-col md:flex-row gap-4">
+          <div className="bg-[#0a0a0a] rounded-2xl border border-[#222] p-4 mb-8 flex flex-col lg:flex-row gap-4">
             <div className="relative flex-grow">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-white/40" />
               <Input 
@@ -100,17 +109,31 @@ const EvenementsPage = () => {
                 className="pl-10 bg-[#111] border-[#333] text-white focus:border-[#D4AF37]"
               />
             </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full md:w-[200px] bg-[#111] border-[#333] text-white">
-                <Filter className="w-4 h-4 mr-2" /> <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent className="bg-[#111] border-[#333] text-white">
-                <SelectItem value="all">Tous les types</SelectItem>
-                <SelectItem value="Concert">Concert</SelectItem>
-                <SelectItem value="Atelier">Atelier</SelectItem>
-                <SelectItem value="Compétition">Compétition</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full sm:w-[180px] bg-[#111] border-[#333] text-white">
+                  <Filter className="w-4 h-4 mr-2" /> <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#111] border-[#333] text-white">
+                  <SelectItem value="all">Tous les types</SelectItem>
+                  <SelectItem value="Concert">Concert</SelectItem>
+                  <SelectItem value="Atelier">Atelier</SelectItem>
+                  <SelectItem value="Compétition">Compétition</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={cityFilter} onValueChange={setCityFilter}>
+                <SelectTrigger className="w-full sm:w-[180px] bg-[#111] border-[#333] text-white">
+                  <MapPin className="w-4 h-4 mr-2 text-[#D4AF37]" /> <SelectValue placeholder="Ville" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#111] border-[#333] text-white">
+                  <SelectItem value="all">Toutes les villes</SelectItem>
+                  {cities.map(city => (
+                    <SelectItem key={city} value={city}>{city}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {loading ? (

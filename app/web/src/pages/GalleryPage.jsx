@@ -21,7 +21,12 @@ const GalleryPage = () => {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 500);
   const [typeFilter, setTypeFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [genreFilter, setGenreFilter] = useState('all');
   const [sortOption, setSortOption] = useState('trending'); // trending, newest, popular
+
+  const roles = ['Artiste', 'Producteur', 'Beat maker', 'Photographe', 'Réalisateur', 'Manager', 'Ingénieur de son', 'Auditeur', 'Autre'];
+  const genres = ['Rap', 'Hip-Hop', 'Drill', 'R&B', 'Trap', 'Afrobeat', 'Gospel', 'Autre'];
 
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [showLikersModal, setShowLikersModal] = useState(false);
@@ -47,6 +52,10 @@ const GalleryPage = () => {
           
           if (debouncedSearch) {
             query = query.or(`title.ilike.%${debouncedSearch}%,genre.ilike.%${debouncedSearch}%`);
+          }
+
+          if (genreFilter !== 'all') {
+            query = query.eq('genre', genreFilter);
           }
 
           const { data: uploads, error: uploadsError } = await query.limit(50);
@@ -80,6 +89,10 @@ const GalleryPage = () => {
             query = query.or(`name.ilike.%${debouncedSearch}%,username.ilike.%${debouncedSearch}%,user_role.ilike.%${debouncedSearch}%`);
           }
 
+          if (roleFilter !== 'all') {
+            query = query.eq('user_role', roleFilter);
+          }
+
           const { data: users, error: usersError } = await query.limit(30);
 
           if (usersError) throw usersError;
@@ -95,7 +108,8 @@ const GalleryPage = () => {
             image: getFileUrl('avatars', u.profilePhoto) || getFileUrl('avatars', u.avatar),
             link: `/profil/${u.id}`,
             score: u.is_premium ? 1000 : 0, // Premium artists get base boost
-            views: 0
+            views: 0,
+            role: u.user_role
           }));
           allItems = [...allItems, ...formattedUsers];
         }
@@ -167,7 +181,7 @@ const GalleryPage = () => {
     };
 
     fetchGallery();
-  }, [debouncedSearch, typeFilter, sortOption]);
+  }, [debouncedSearch, typeFilter, roleFilter, genreFilter, sortOption]);
 
   return (
     <>
@@ -199,7 +213,7 @@ const GalleryPage = () => {
                 className="pl-10 bg-[#111] border-[#333] text-white focus:border-[#D4AF37]"
               />
             </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <Select value={typeFilter} onValueChange={(val) => { setTypeFilter(val); setRoleFilter('all'); setGenreFilter('all'); }}>
               <SelectTrigger className="w-full md:w-[200px] bg-[#111] border-[#333] text-white">
                 <Filter className="w-4 h-4 mr-2" /> <SelectValue placeholder="Type de contenu" />
               </SelectTrigger>
@@ -210,6 +224,35 @@ const GalleryPage = () => {
                 <SelectItem value="Publications">Publications</SelectItem>
               </SelectContent>
             </Select>
+
+            {typeFilter === 'Artistes' && (
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-full md:w-[180px] bg-[#111] border-[#333] text-[#D4AF37] border-[#D4AF37]/30 animate-in fade-in zoom-in-95 duration-200">
+                  <SelectValue placeholder="Tous les rôles" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#111] border-[#333] text-white">
+                  <SelectItem value="all">Tous les rôles</SelectItem>
+                  {roles.map(role => (
+                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            {typeFilter === 'Musique' && (
+              <Select value={genreFilter} onValueChange={setGenreFilter}>
+                <SelectTrigger className="w-full md:w-[180px] bg-[#111] border-[#333] text-[#D4AF37] border-[#D4AF37]/30 animate-in fade-in zoom-in-95 duration-200">
+                  <SelectValue placeholder="Tous les genres" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#111] border-[#333] text-white">
+                  <SelectItem value="all">Tous les genres</SelectItem>
+                  {genres.map(genre => (
+                    <SelectItem key={genre} value={genre}>{genre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
             <Select value={sortOption} onValueChange={setSortOption}>
               <SelectTrigger className="w-full md:w-[200px] bg-[#111] border-[#333] text-white">
                 <SelectValue placeholder="Trier par" />

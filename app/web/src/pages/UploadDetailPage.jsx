@@ -43,6 +43,14 @@ const UploadDetailPage = () => {
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [expandedComments, setExpandedComments] = useState({});
+
+  const toggleCommentExpand = (commentId) => {
+    setExpandedComments(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
 
   const getFileUrl = (bucket, path) => {
     if (!path) return '';
@@ -484,13 +492,13 @@ const UploadDetailPage = () => {
                 )}
                 {upload.description ? (
                   <div className="relative">
-                    <p className={`text-white/80 leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isDescExpanded ? 'line-clamp-3 md:line-clamp-none' : ''}`}>
+                    <p className={`text-white/80 leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isDescExpanded ? 'line-clamp-4' : ''}`}>
                       {upload.description}
                     </p>
-                    {upload.description.length > 150 && (
+                    {upload.description.length > 300 && (
                       <button
                         onClick={() => setIsDescExpanded(!isDescExpanded)}
-                        className="mt-2 text-[#D4AF37] font-bold text-xs uppercase tracking-widest md:hidden"
+                        className="mt-3 text-[#D4AF37] font-black text-[10px] uppercase tracking-widest hover:underline"
                       >
                         {isDescExpanded ? 'Voir moins' : 'Lire la suite'}
                       </button>
@@ -548,7 +556,19 @@ const UploadDetailPage = () => {
                               </button>
                             )}
                           </div>
-                          <p className="text-white/80 text-sm leading-relaxed">{c.text}</p>
+                          <div className="relative">
+                            <p className={`text-white/80 text-sm leading-relaxed whitespace-pre-wrap transition-all duration-200 ${!expandedComments[c.id] ? 'line-clamp-3' : ''}`}>
+                              {c.text}
+                            </p>
+                            {c.text.length > 200 && (
+                              <button
+                                onClick={() => toggleCommentExpand(c.id)}
+                                className="mt-1 text-[#D4AF37] font-bold text-[10px] uppercase tracking-widest hover:underline"
+                              >
+                                {expandedComments[c.id] ? 'Voir moins' : 'Voir plus'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))

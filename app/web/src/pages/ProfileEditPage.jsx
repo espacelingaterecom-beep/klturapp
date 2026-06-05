@@ -27,9 +27,11 @@ import { supabase } from '@/lib/supabaseClient.js';
 import { useNavigate } from 'react-router-dom';
 
 const ProfileEditPage = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
 
@@ -206,12 +208,9 @@ const ProfileEditPage = () => {
   const handleDeleteAccount = async () => {
     setIsDeleting(true);
     try {
-      // Pour Supabase, la suppression d'un utilisateur est complexe côté client.
-      // On appelle une fonction RPC sécurisée ou on marque le profil pour suppression.
       const { error } = await supabase.rpc('request_account_deletion');
 
       if (error) {
-        // Si la fonction RPC n'existe pas, on tente une approche par flag
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
@@ -328,12 +327,12 @@ const ProfileEditPage = () => {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label className="text-white font-bold">Bio</Label>
-                  <span className="text-xs text-white/50">{formData.bio.length}/500</span>
+                  <span className="text-xs text-white/50">{formData.bio.split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
                 </div>
                 <Textarea 
-                  name="bio" value={formData.bio} onChange={handleInputChange} maxLength={500} rows={4} 
+                  name="bio" value={formData.bio} onChange={handleInputChange} rows={8}
                   className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37] resize-none" 
-                  placeholder="Parlez-nous de votre parcours..." 
+                  placeholder="Parlez-nous de votre parcours (Max 1000 mots)..."
                 />
               </div>
             </section>
