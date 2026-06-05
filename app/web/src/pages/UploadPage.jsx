@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const UploadPage = () => {
   const { currentUser } = useAuth();
@@ -36,8 +37,67 @@ const UploadPage = () => {
     videoFile: null
   });
 
-  const handleInputChange = (e) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
+  const [hashtagSuggestions, setHashtagSuggestions] = useState([]);
+  const [mentionIndex, setMentionIndex] = useState(-1);
+
+  const handleInputChange = async (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+
+    if (name === 'description') {
+      const cursorPosition = e.target.selectionStart;
+      const textBeforeCursor = value.substring(0, cursorPosition);
+      const words = textBeforeCursor.split(/\s/);
+      const lastWord = words[words.length - 1];
+
+      if (lastWord.startsWith('@') && lastWord.length > 1) {
+        const query = lastWord.substring(1);
+        setMentionIndex(cursorPosition - lastWord.length);
+
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, username, avatar')
+          .ilike('username', `${query}%`)
+          .limit(5);
+
+        setMentionSuggestions(data || []);
+        setHashtagSuggestions([]);
+      } else if (lastWord.startsWith('#') && lastWord.length > 1) {
+        const query = lastWord.substring(1);
+        setMentionIndex(cursorPosition - lastWord.length);
+
+        const tags = ['RCA', 'HipHop', 'Bangui', 'KlturRap', 'Nouveauté', 'Clip', 'RapCentrafricain']
+          .filter(t => t.toLowerCase().startsWith(query.toLowerCase()))
+          .slice(0, 5);
+
+        setHashtagSuggestions(tags);
+        setMentionSuggestions([]);
+      } else {
+        setMentionSuggestions([]);
+        setHashtagSuggestions([]);
+      }
+    }
+  };
+
+  const selectMention = (username) => {
+    const before = formData.description.substring(0, mentionIndex);
+    const after = formData.description.substring(formData.description.indexOf(' ', mentionIndex) === -1 ? formData.description.length : formData.description.indexOf(' ', mentionIndex));
+    setFormData(prev => ({
+      ...prev,
+      description: `${before}@${username} ${after.trim()}`
+    }));
+    setMentionSuggestions([]);
+  };
+
+  const selectHashtag = (tag) => {
+    const before = formData.description.substring(0, mentionIndex);
+    const after = formData.description.substring(formData.description.indexOf(' ', mentionIndex) === -1 ? formData.description.length : formData.description.indexOf(' ', mentionIndex));
+    setFormData(prev => ({
+      ...prev,
+      description: `${before}#${tag} ${after.trim()}`
+    }));
+    setHashtagSuggestions([]);
   };
 
   const handleFileChange = (e) => {
@@ -215,16 +275,52 @@ const UploadPage = () => {
                     <Input name="collaborators" value={formData.collaborators} onChange={handleInputChange} className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37]" placeholder="Noms séparés par des virgules" />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative">
                     <div className="flex justify-between items-center">
                       <Label className="text-white font-bold">Description</Label>
                       <span className="text-xs text-white/50">{(formData.description || "").split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
                     </div>
                     <Textarea
                       name="description" value={formData.description} onChange={handleInputChange} rows={8}
-                      className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37] resize-none"
+                      className="bg-[#111] border-[#222] text-white focus:border-[#D4AF37] resize-none"
                       placeholder="Racontez l'histoire de ce projet (Max 1000 mots)..."
                     />
+                    <div className="mt-2 text-white/40 text-[10px] leading-relaxed">
+                      {formatRichText(formData.description)}
+                    </div>
+
+                    {mentionSuggestions.length > 0 && (
+                      <div className="absolute bottom-full left-0 w-64 bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                        {mentionSuggestions.map(user => (
+                          <button
+                            key={user.id}
+                            type="button"
+                            onClick={() => selectMention(user.username)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left"
+                          >
+                            <Avatar className="h-6 w-6 border border-white/10">
+                              <AvatarFallback className="text-[10px]">{user.username[0]}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-bold text-sm">@{user.username}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {hashtagSuggestions.length > 0 && (
+                      <div className="absolute bottom-full left-0 w-64 bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                        {hashtagSuggestions.map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => selectHashtag(tag)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left font-bold text-sm"
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

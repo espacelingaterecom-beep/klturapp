@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import LikersModal from '@/components/LikersModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const PublicArtistProfilePage = () => {
   const { userId } = useParams();
@@ -32,41 +33,47 @@ const PublicArtistProfilePage = () => {
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [showLikersModal, setShowLikersModal] = useState(false);
 
-  const isOwner = currentUser?.id === userId;
+  const isOwner = currentUser?.id === artist?.id;
 
   useEffect(() => {
     const fetchArtistData = async () => {
       try {
-        // Fetch Artist Profile
-        const { data: userData, error: userError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
+        // Check if userId is a valid UUID or a username
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId);
+
+        let userQuery = supabase.from('profiles').select('*');
+        if (isUUID) {
+          userQuery = userQuery.eq('id', userId);
+        } else {
+          userQuery = userQuery.eq('username', userId);
+        }
+
+        const { data: userData, error: userError } = await userQuery.single();
 
         if (userError) throw userError;
         setArtist(userData);
+        const actualId = userData.id;
 
         // Fetch Uploads, Followers, Posts and Reposts
         const [uploadsResult, followersResult, postsResult, repostsResult] = await Promise.all([
           supabase
             .from('uploads')
             .select('*', { count: 'exact' })
-            .eq('user_id', userId)
+            .eq('user_id', actualId)
             .order('created_at', { ascending: false }),
           supabase
             .from('followers')
             .select('*', { count: 'exact' })
-            .eq('following_id', userId),
+            .eq('following_id', actualId),
           supabase
             .from('posts')
             .select('*', { count: 'exact' })
-            .eq('user_id', userId)
+            .eq('user_id', actualId)
             .order('created_at', { ascending: false }),
           supabase
             .from('reposts')
             .select('*, posts(*, profiles:user_id(*)), uploads(*, profiles:user_id(*))', { count: 'exact' })
-            .eq('user_id', userId)
+            .eq('user_id', actualId)
             .order('created_at', { ascending: false })
         ]);
         
@@ -99,12 +106,12 @@ const PublicArtistProfilePage = () => {
           reposts: repostsResult.count || 0
         });
 
-        if (isAuthenticated && !isOwner) {
+        if (isAuthenticated && currentUser?.id !== actualId) {
           const { data: myFollow, error: followError } = await supabase
             .from('followers')
             .select('id')
             .eq('follower_id', currentUser.id)
-            .eq('following_id', userId)
+            .eq('following_id', actualId)
             .maybeSingle();
 
           if (myFollow) {
@@ -122,10 +129,11 @@ const PublicArtistProfilePage = () => {
 
     fetchArtistData();
     window.scrollTo(0, 0);
-  }, [userId, isAuthenticated, currentUser, isOwner]);
+  }, [userId, isAuthenticated, currentUser]);
 
   const handleFollow = async () => {
     if (!isAuthenticated) return toast.error("Connectez-vous pour suivre");
+    if (!artist) return;
 
     try {
       if (isFollowing) {
@@ -143,7 +151,7 @@ const PublicArtistProfilePage = () => {
           .from('followers')
           .insert({
             follower_id: currentUser.id,
-            following_id: userId
+            following_id: artist.id
           })
           .select()
           .single();
@@ -162,14 +170,14 @@ const PublicArtistProfilePage = () => {
   };
 
   const handleMessage = async () => {
-    if (!isAuthenticated || !currentUser) return toast.error("Connectez-vous pour envoyer un message");
+    if (!isAuthenticated || !currentUser || !artist) return toast.error("Connectez-vous pour envoyer un message");
 
     try {
       // 1. Chercher si une conversation existe déjà
       const { data: existing, error } = await supabase
         .from('conversations')
         .select('id')
-        .or(`and(participant1_id.eq.${currentUser.id},participant2_id.eq.${userId}),and(participant1_id.eq.${userId},participant2_id.eq.${currentUser.id})`)
+        .or(`and(participant1_id.eq.${currentUser.id},participant2_id.eq.${artist.id}),and(participant1_id.eq.${artist.id},participant2_id.eq.${currentUser.id})`)
         .maybeSingle();
 
       if (error) throw error;
@@ -180,7 +188,7 @@ const PublicArtistProfilePage = () => {
         // 2. Créer une nouvelle conversation si inexistante
         const { data: newConv, error: createError } = await supabase
           .from('conversations')
-          .insert([{ participant1_id: currentUser.id, participant2_id: userId, last_message: 'Nouvelle conversation' }])
+          .insert([{ participant1_id: currentUser.id, participant2_id: artist.id, last_message: 'Nouvelle conversation' }])
           .select()
           .single();
 
@@ -248,7 +256,7 @@ const PublicArtistProfilePage = () => {
                   {artist?.bio && (
                     <div className="mb-6 relative">
                       <p className={`text-white/80 max-w-2xl leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isBioExpanded ? 'line-clamp-3' : ''}`}>
-                        {artist.bio}
+                        {formatRichText(artist.bio)}
                       </p>
                       {artist.bio.length > 200 && (
                         <button

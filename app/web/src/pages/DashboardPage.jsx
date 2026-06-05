@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import BannerEditModal from '@/components/BannerEditModal.jsx';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const DashboardPage = () => {
   const { currentUser } = useAuth();
@@ -430,7 +431,7 @@ const DashboardPage = () => {
                                   </div>
                                   <div className="relative">
                                     <p className={`text-xs text-white/80 italic whitespace-pre-wrap transition-all duration-200 ${!expandedComments[c.id] ? 'line-clamp-2' : ''}`}>
-                                      "{c.text}"
+                                      "{formatRichText(c.text)}"
                                     </p>
                                     {c.text.length > 100 && (
                                       <button
@@ -620,7 +621,7 @@ const DashboardPage = () => {
                                     </div>
                                     <div className="relative mb-4">
                                       <p className={`text-sm text-white/80 leading-relaxed whitespace-pre-wrap transition-all duration-200 ${!expandedComments[c.id] ? 'line-clamp-3' : ''}`}>
-                                        {c.text}
+                                        {formatRichText(c.text)}
                                       </p>
                                       {c.text.length > 150 && (
                                         <button

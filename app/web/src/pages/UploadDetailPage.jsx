@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext.jsx';
 import { useAudio } from '@/contexts/AudioContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
 import { Capacitor } from '@capacitor/core';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const UploadDetailPage = () => {
   const { id } = useParams();
@@ -44,6 +45,61 @@ const UploadDetailPage = () => {
   const [postingComment, setPostingComment] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [expandedComments, setExpandedComments] = useState({});
+
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
+  const [hashtagSuggestions, setHashtagSuggestions] = useState([]);
+  const [mentionIndex, setMentionIndex] = useState(-1);
+
+  const handleCommentChange = async (e) => {
+    const val = e.target.value;
+    setNewComment(val);
+
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorPosition);
+    const words = textBeforeCursor.split(/\s/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith('@') && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      setMentionIndex(cursorPosition - lastWord.length);
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, username, avatar')
+        .ilike('username', `${query}%`)
+        .limit(5);
+
+      setMentionSuggestions(data || []);
+      setHashtagSuggestions([]);
+    } else if (lastWord.startsWith('#') && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      setMentionIndex(cursorPosition - lastWord.length);
+
+      const tags = ['RCA', 'HipHop', 'Bangui', 'KlturRap', 'Nouveauté', 'Clip', 'RapCentrafricain']
+        .filter(t => t.toLowerCase().startsWith(query.toLowerCase()))
+        .slice(0, 5);
+
+      setHashtagSuggestions(tags);
+      setMentionSuggestions([]);
+    } else {
+      setMentionSuggestions([]);
+      setHashtagSuggestions([]);
+    }
+  };
+
+  const selectMention = (username) => {
+    const before = newComment.substring(0, mentionIndex);
+    const after = newComment.substring(newComment.indexOf(' ', mentionIndex) === -1 ? newComment.length : newComment.indexOf(' ', mentionIndex));
+    setNewComment(`${before}@${username} ${after.trim()}`);
+    setMentionSuggestions([]);
+  };
+
+  const selectHashtag = (tag) => {
+    const before = newComment.substring(0, mentionIndex);
+    const after = newComment.substring(newComment.indexOf(' ', mentionIndex) === -1 ? newComment.length : newComment.indexOf(' ', mentionIndex));
+    setNewComment(`${before}#${tag} ${after.trim()}`);
+    setHashtagSuggestions([]);
+  };
 
   const toggleCommentExpand = (commentId) => {
     setExpandedComments(prev => ({
@@ -493,7 +549,7 @@ const UploadDetailPage = () => {
                 {upload.description ? (
                   <div className="relative">
                     <p className={`text-white/80 leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isDescExpanded ? 'line-clamp-4' : ''}`}>
-                      {upload.description}
+                      {formatRichText(upload.description)}
                     </p>
                     {upload.description.length > 300 && (
                       <button
@@ -520,11 +576,44 @@ const UploadDetailPage = () => {
                     <AvatarImage src={currentUser?.avatar ? getFileUrl('avatars', currentUser.avatar) : ''} />
                     <AvatarFallback className="bg-[#222] text-[#D4AF37] font-bold">{currentUser?.username?.charAt(0) || 'U'}</AvatarFallback>
                   </Avatar>
-                  <div className="flex-grow">
+                  <div className="flex-grow relative">
                     <Textarea 
-                      value={newComment} onChange={e => setNewComment(e.target.value)} onClick={() => !isAuthenticated && setShowLoginPrompt(true)}
+                      value={newComment} onChange={handleCommentChange} onClick={() => !isAuthenticated && setShowLoginPrompt(true)}
                       placeholder="Ajouter un commentaire..." className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37] resize-none min-h-[80px] mb-2"
                     />
+
+                    {mentionSuggestions.length > 0 && (
+                      <div className="absolute bottom-full left-0 w-64 bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                        {mentionSuggestions.map(user => (
+                          <button
+                            key={user.id}
+                            onClick={() => selectMention(user.username)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left"
+                          >
+                            <Avatar className="h-6 w-6 border border-white/10">
+                              <AvatarImage src={getFileUrl('avatars', user.avatar)} />
+                              <AvatarFallback>{user.username[0]}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-bold text-sm">@{user.username}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {hashtagSuggestions.length > 0 && (
+                      <div className="absolute bottom-full left-0 w-64 bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                        {hashtagSuggestions.map(tag => (
+                          <button
+                            key={tag}
+                            onClick={() => selectHashtag(tag)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left font-bold text-sm"
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="flex justify-end">
                       <Button onClick={handlePostComment} disabled={postingComment || !newComment.trim()} className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-bold px-6">
                         Poster
@@ -558,7 +647,7 @@ const UploadDetailPage = () => {
                           </div>
                           <div className="relative">
                             <p className={`text-white/80 text-sm leading-relaxed whitespace-pre-wrap transition-all duration-200 ${!expandedComments[c.id] ? 'line-clamp-3' : ''}`}>
-                              {c.text}
+                              {formatRichText(c.text)}
                             </p>
                             {c.text.length > 200 && (
                               <button

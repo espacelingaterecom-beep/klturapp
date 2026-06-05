@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Award, ArrowRight, Facebook, Youtube, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient.js';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const NewsCard = ({ news }) => {
   const getFileUrl = (bucket, path) => {
@@ -55,7 +56,7 @@ const NewsCard = ({ news }) => {
         </div>
         
         <h3 className="font-bold text-white text-lg mb-2 line-clamp-2 group-hover:text-[#D4AF37] transition-colors">{news.title}</h3>
-        <p className="text-sm text-white/60 line-clamp-3 mb-4 flex-grow">{news.excerpt || (news.content ? news.content.substring(0, 100) + '...' : '')}</p>
+        <div className="text-sm text-white/60 line-clamp-3 mb-4 flex-grow">{formatRichText(news.excerpt || (news.content ? news.content.substring(0, 100) + '...' : ''))}</div>
 
         <div className="flex items-center justify-between pt-4 border-t border-[#222] mt-auto">
           <div className="flex items-center gap-2">

@@ -15,6 +15,7 @@ import LikersModal from '@/components/LikersModal.jsx';
 import LoginPromptModal from '@/components/LoginPromptModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const PostDetailPage = () => {
   const { id } = useParams();
@@ -39,6 +40,61 @@ const PostDetailPage = () => {
 
   const [showLikersModal, setShowLikersModal] = useState(false);
   const [expandedComments, setExpandedComments] = useState({});
+
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
+  const [hashtagSuggestions, setHashtagSuggestions] = useState([]);
+  const [mentionIndex, setMentionIndex] = useState(-1);
+
+  const handleCommentChange = async (e) => {
+    const val = e.target.value;
+    setNewComment(val);
+
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorPosition);
+    const words = textBeforeCursor.split(/\s/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith('@') && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      setMentionIndex(cursorPosition - lastWord.length);
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, username, avatar')
+        .ilike('username', `${query}%`)
+        .limit(5);
+
+      setMentionSuggestions(data || []);
+      setHashtagSuggestions([]);
+    } else if (lastWord.startsWith('#') && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      setMentionIndex(cursorPosition - lastWord.length);
+
+      const tags = ['RCA', 'HipHop', 'Bangui', 'KlturRap', 'Nouveauté', 'Clip', 'RapCentrafricain']
+        .filter(t => t.toLowerCase().startsWith(query.toLowerCase()))
+        .slice(0, 5);
+
+      setHashtagSuggestions(tags);
+      setMentionSuggestions([]);
+    } else {
+      setMentionSuggestions([]);
+      setHashtagSuggestions([]);
+    }
+  };
+
+  const selectMention = (username) => {
+    const before = newComment.substring(0, mentionIndex);
+    const after = newComment.substring(newComment.indexOf(' ', mentionIndex) === -1 ? newComment.length : newComment.indexOf(' ', mentionIndex));
+    setNewComment(`${before}@${username} ${after.trim()}`);
+    setMentionSuggestions([]);
+  };
+
+  const selectHashtag = (tag) => {
+    const before = newComment.substring(0, mentionIndex);
+    const after = newComment.substring(newComment.indexOf(' ', mentionIndex) === -1 ? newComment.length : newComment.indexOf(' ', mentionIndex));
+    setNewComment(`${before}#${tag} ${after.trim()}`);
+    setHashtagSuggestions([]);
+  };
 
   const toggleCommentExpand = (commentId) => {
     setExpandedComments(prev => ({
@@ -250,7 +306,7 @@ const PostDetailPage = () => {
               <div className="flex-grow overflow-y-auto p-6 space-y-6 max-h-[400px] lg:max-h-none">
                 {post.caption && (
                   <div className="pb-6 border-b border-[#222]">
-                    <p className="text-white/90 leading-relaxed">{post.caption}</p>
+                    <p className="text-white/90 leading-relaxed">{formatRichText(post.caption)}</p>
                   </div>
                 )}
 
@@ -271,7 +327,7 @@ const PostDetailPage = () => {
                           </div>
                           <div className="relative">
                             <p className={`text-sm text-white/80 whitespace-pre-wrap transition-all duration-200 ${!expandedComments[comment.id] ? 'line-clamp-3' : ''}`}>
-                              {comment.text}
+                              {formatRichText(comment.text)}
                             </p>
                             {comment.text.length > 150 && (
                               <button
@@ -324,10 +380,41 @@ const PostDetailPage = () => {
                   </DropdownMenu>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 relative">
+                  {mentionSuggestions.length > 0 && (
+                    <div className="absolute bottom-full left-0 w-full bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                      {mentionSuggestions.map(user => (
+                        <button
+                          key={user.id}
+                          onClick={() => selectMention(user.username)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left"
+                        >
+                          <Avatar className="h-6 w-6 border border-white/10">
+                            <AvatarImage src={getPublicImageUrl('avatars', user.avatar)} />
+                            <AvatarFallback>{user.username[0]}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-bold text-sm">@{user.username}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {hashtagSuggestions.length > 0 && (
+                    <div className="absolute bottom-full left-0 w-full bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                      {hashtagSuggestions.map(tag => (
+                        <button
+                          key={tag}
+                          onClick={() => selectHashtag(tag)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left font-bold text-sm"
+                        >
+                          #{tag}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <Textarea
                     value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
+                    onChange={handleCommentChange}
                     placeholder="Votre avis..."
                     className="bg-[#111] border-[#222] focus:border-[#D4AF37] resize-none h-12 min-h-0 py-3"
                   />
