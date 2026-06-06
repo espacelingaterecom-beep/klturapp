@@ -49,6 +49,7 @@ const DashboardPage = () => {
   const [showBannerModal, setShowBannerModal] = useState(false);
   const [showCashoutModal, setShowCashoutModal] = useState(false);
   const [cashoutPhone, setCashoutPhone] = useState('');
+  const [cashoutName, setCashoutName] = useState('');
   const [isCashoutSubmitting, setIsCashoutSubmitting] = useState(false);
   const [userProfile, setUserProfile] = useState(currentUser);
   const [expandedComments, setExpandedComments] = useState({});
@@ -176,6 +177,11 @@ const DashboardPage = () => {
       return;
     }
 
+    if (!cashoutName.trim()) {
+      toast.error("Veuillez entrer le nom enregistré sur le compte Orange Money.");
+      return;
+    }
+
     setIsCashoutSubmitting(true);
     try {
       const { data, error } = await supabase
@@ -184,6 +190,7 @@ const DashboardPage = () => {
           user_id: currentUser.id,
           amount: estimatedGains,
           phone_number: cashoutPhone,
+          account_name: cashoutName.trim(),
           method: 'Orange Money',
           status: 'pending'
         }])
@@ -196,6 +203,7 @@ const DashboardPage = () => {
       setPayoutHistory([data, ...payoutHistory]);
       setShowCashoutModal(false);
       setCashoutPhone('');
+      setCashoutName('');
     } catch (err) {
       console.error(err);
       toast.error("Erreur lors de l'envoi de la demande.");
@@ -204,19 +212,31 @@ const DashboardPage = () => {
     }
   };
 
-  const SidebarItem = ({ id, icon: Icon, label }) => (
-    <button
-      onClick={() => setActiveTab(id)}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${
-        activeTab === id
-          ? 'bg-[#D4AF37] text-black shadow-lg gold-glow'
-          : 'text-white/40 hover:text-white hover:bg-white/5'
-      }`}
-    >
-      <Icon className="w-5 h-5" />
-      <span className="hidden lg:block">{label}</span>
-    </button>
-  );
+  const SidebarItem = ({ id, icon: Icon, label }) => {
+    const isLocked = !isPremium && (id === 'analytics' || id === 'revenues');
+
+    return (
+      <button
+        onClick={() => {
+          if (isLocked) {
+            toast.error("Cette fonctionnalité nécessite un compte Premium.");
+            navigate('/premium');
+            return;
+          }
+          setActiveTab(id);
+        }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+          activeTab === id
+            ? 'bg-[#D4AF37] text-black shadow-lg gold-glow'
+            : 'text-white/40 hover:text-white hover:bg-white/5'
+        } ${isLocked ? 'opacity-50 grayscale' : ''}`}
+      >
+        <Icon className="w-5 h-5" />
+        <span className="hidden lg:block">{label}</span>
+        {isLocked && <ShieldAlert className="w-3 h-3 ml-auto text-[#D4AF37]" />}
+      </button>
+    );
+  };
 
   return (
     <>
@@ -233,9 +253,26 @@ const DashboardPage = () => {
 
             <SidebarItem id="overview" icon={LayoutDashboard} label="Tableau de bord" />
             <SidebarItem id="content" icon={ListMusic} label="Contenu" />
-            <SidebarItem id="analytics" icon={PieChart} label="Données analytiques" />
+
+            <div className="relative group">
+              <SidebarItem id="analytics" icon={PieChart} label="Données analytiques" />
+              {!isPremium && (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-xl flex items-center justify-center pointer-events-none">
+                  <ShieldAlert className="w-4 h-4 text-[#D4AF37]" />
+                </div>
+              )}
+            </div>
+
             <SidebarItem id="comments" icon={MessageSquareQuote} label="Commentaires" />
-            <SidebarItem id="revenues" icon={Wallet} label="Revenus" />
+
+            <div className="relative group">
+              <SidebarItem id="revenues" icon={Wallet} label="Revenus" />
+              {!isPremium && (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-xl flex items-center justify-center pointer-events-none">
+                  <ShieldAlert className="w-4 h-4 text-[#D4AF37]" />
+                </div>
+              )}
+            </div>
 
             <div className="mt-auto pt-6 border-t border-[#222] space-y-2">
               <button
@@ -785,7 +822,11 @@ const DashboardPage = () => {
                                    <tr key={p.id} className="text-sm">
                                       <td className="px-6 py-4 text-white/60">{new Date(p.created_at).toLocaleDateString()}</td>
                                       <td className="px-6 py-4 font-bold text-[#D4AF37]">{p.amount.toLocaleString()} FCFA</td>
-                                      <td className="px-6 py-4 text-white/60">{p.method} ({p.phone_number})</td>
+                                      <td className="px-6 py-4 text-white/60">
+                                         {p.method} <br />
+                                         <span className="text-[10px] text-white/40 uppercase font-black">{p.phone_number}</span> <br />
+                                         <span className="text-[10px] text-[#D4AF37] font-bold italic">{p.account_name}</span>
+                                      </td>
                                       <td className="px-6 py-4">
                                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
                                             p.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' :
@@ -828,21 +869,33 @@ const DashboardPage = () => {
                 </span>
              </div>
 
-             <div className="space-y-2">
-                <Label className="text-xs font-black uppercase text-white/40">Numéro Orange Money</Label>
-                <div className="relative">
+             <div className="space-y-4">
+                <div className="space-y-2">
+                   <Label className="text-xs font-black uppercase text-white/40">Nom & Prénom (Compte Orange Money)</Label>
                    <Input
-                      value={cashoutPhone}
-                      onChange={(e) => setCashoutPhone(e.target.value)}
-                      className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] pl-10"
-                      placeholder="00236..."
+                      value={cashoutName}
+                      onChange={(e) => setCashoutName(e.target.value)}
+                      className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]"
+                      placeholder="Ex: Jean Dupont"
                    />
-                   <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" className="w-5 h-5" alt="Orange" />
+                </div>
+
+                <div className="space-y-2">
+                   <Label className="text-xs font-black uppercase text-white/40">Numéro Orange Money</Label>
+                   <div className="relative">
+                      <Input
+                         value={cashoutPhone}
+                         onChange={(e) => setCashoutPhone(e.target.value)}
+                         className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] pl-10"
+                         placeholder="00236..."
+                      />
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                         <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" className="w-5 h-5" alt="Orange" />
+                      </div>
                    </div>
                 </div>
-                <p className="text-[10px] text-white/20 italic">Vérifiez bien votre numéro avant de valider.</p>
              </div>
+             <p className="text-[10px] text-white/20 italic">Vérifiez bien vos informations avant de valider. Tout retrait envoyé sur un mauvais compte ne pourra être récupéré.</p>
           </div>
 
           <DialogFooter>

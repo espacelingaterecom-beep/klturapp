@@ -1239,7 +1239,7 @@ const AdminDashboard = () => {
                          <tr>
                             <th className="px-8 py-6">Artiste</th>
                             <th className="px-8 py-6">Montant</th>
-                            <th className="px-8 py-6">Coordonnées</th>
+                            <th className="px-8 py-6">Détails Compte OM</th>
                             <th className="px-8 py-6">Statut</th>
                             <th className="px-8 py-6 text-right">Actions</th>
                          </tr>
@@ -1267,9 +1267,12 @@ const AdminDashboard = () => {
                                   <span className="text-lg font-black text-[#D4AF37]">{p.amount.toLocaleString()} FCFA</span>
                                </td>
                                <td className="px-8 py-5">
-                                  <div className="flex items-center gap-2">
-                                     <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" className="w-4 h-4" alt="Orange" />
-                                     <span className="font-bold text-white/80">{p.phone_number}</span>
+                                  <div className="flex flex-col gap-1">
+                                     <div className="flex items-center gap-2">
+                                        <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" className="w-4 h-4" alt="Orange" />
+                                        <span className="font-bold text-white/80">{p.phone_number}</span>
+                                     </div>
+                                     <p className="text-[10px] text-[#D4AF37] font-black uppercase tracking-wider">{p.account_name || 'Nom non fourni'}</p>
                                   </div>
                                </td>
                                <td className="px-8 py-5">

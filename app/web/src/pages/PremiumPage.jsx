@@ -116,10 +116,10 @@ const PremiumPage = () => {
                     
                     <div className="relative z-10 text-center mb-8">
                       <h2 className="text-3xl font-black text-white uppercase mb-2">Passe Premium</h2>
-                      <p className="text-white/50 font-medium">Abonnement annuel</p>
+                      <p className="text-white/50 font-medium">Abonnement mensuel</p>
                       <div className="mt-6 flex items-end justify-center gap-2">
                         <span className="text-5xl font-black text-[#D4AF37]">5000</span>
-                        <span className="text-xl text-white/50 font-bold mb-1">FCFA / an</span>
+                        <span className="text-xl text-white/50 font-bold mb-1">FCFA / mois</span>
                       </div>
                     </div>
 
@@ -135,11 +135,31 @@ const PremiumPage = () => {
                     <Button 
                       onClick={handlePayment} 
                       disabled={loading}
-                      className="w-full h-16 bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all font-black text-lg uppercase tracking-wider animate-gold-pulse relative overflow-hidden"
+                      className="w-full h-16 bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all font-black text-lg uppercase tracking-wider relative overflow-hidden"
                     >
                       {loading ? 'Redirection...' : 'Payer avec Orange Money'}
                     </Button>
-                    <p className="text-center text-xs text-white/40 mt-4">Paiement sécurisé. Activation immédiate après confirmation.</p>
+
+                    <div className="flex items-center gap-4 my-6">
+                      <div className="h-px bg-white/10 flex-grow" />
+                      <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">OU</span>
+                      <div className="h-px bg-white/10 flex-grow" />
+                    </div>
+
+                    <a
+                      href="https://wa.me/qr/RXPRJWAHFIXRP1"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full h-14 bg-green-600 hover:bg-green-700 text-white transition-all font-bold text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-3"
+                    >
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" className="w-5 h-5 invert brightness-0" alt="" />
+                      S'abonner via WhatsApp
+                    </a>
+
+                    <p className="text-center text-[10px] text-white/30 mt-6 leading-relaxed italic">
+                      Choisissez Orange Money pour une activation automatique, <br />
+                      ou WhatsApp pour un paiement assisté.
+                    </p>
                   </div>
                 </motion.div>
               </div>
