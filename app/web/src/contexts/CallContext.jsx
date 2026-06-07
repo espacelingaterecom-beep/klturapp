@@ -63,10 +63,9 @@ export const CallProvider = ({ children }) => {
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
-        table: 'calls',
-        filter: `id=eq.${activeCallRecordId.current}`
+        table: 'calls'
       }, (payload) => {
-        if (payload.new.status === 'ended') {
+        if (payload.new.id === activeCallRecordId.current && payload.new.status === 'ended') {
           cleanupCall();
         }
       })
@@ -85,6 +84,11 @@ export const CallProvider = ({ children }) => {
     setCallStatus('outgoing');
 
     try {
+      // For mobile: check if we are on Capacitor and request permissions if needed
+      if (typeof window !== 'undefined' && window.Capacitor) {
+        console.log('Mobile detected, requesting media permissions');
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: type === 'video',
         audio: true
@@ -107,8 +111,17 @@ export const CallProvider = ({ children }) => {
       activeCallRecordId.current = callRecord.id;
 
       // 2. Start PeerJS Call
+      if (!peer || peer.destroyed) {
+        throw new Error("Le service d'appel n'est pas encore prêt. Veuillez patienter ou rafraîchir.");
+      }
+
       const peerId = targetUser.id.replace(/-/g, '');
       const call = peer.call(peerId, stream);
+
+      if (!call) {
+        throw new Error("Impossible d'établir la connexion avec le destinataire.");
+      }
+
       currentCallRef.current = call;
 
       call.on('stream', (remote) => {
@@ -117,10 +130,20 @@ export const CallProvider = ({ children }) => {
       });
 
       call.on('close', cleanupCall);
+      call.on('error', (e) => {
+        console.error("Peer Call Error:", e);
+        cleanupCall();
+      });
 
     } catch (err) {
-      console.error(err);
-      toast.error("Échec de l'appel");
+      console.error("Call Start Error:", err);
+      if (err.name === 'NotAllowedError') {
+        toast.error("Accès à la caméra/micro refusé par le navigateur.");
+      } else if (err.code === 'PGRST116' || err.message?.includes('calls')) {
+        toast.error("Erreur technique : La table 'calls' n'est pas encore prête dans Supabase.");
+      } else {
+        toast.error(`Échec de l'appel : ${err.message || "Erreur inconnue"}`);
+      }
       cleanupCall();
     }
   };

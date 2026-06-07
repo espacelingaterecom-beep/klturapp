@@ -261,7 +261,7 @@ export const AuthProvider = ({ children }) => {
         <div className="min-h-screen bg-black flex items-center justify-center overflow-hidden">
           <div className="flex flex-col items-center animate-heartbeat px-6 text-center">
             <img
-              src="/logo-kltur.png"
+              src="/icon-only.PNG"
               alt="Logo KLTUR RAP"
               className="w-48 h-48 md:w-64 md:h-64 object-contain mb-8 drop-shadow-[0_0_30px_rgba(212,175,55,0.4)]"
             />

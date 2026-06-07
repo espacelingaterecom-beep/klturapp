@@ -33,8 +33,16 @@ const LiveViewerPage = () => {
     const broadcasterId = `live-${artistId.replace(/-/g, '')}`;
     console.log('Connecting to broadcaster:', broadcasterId);
 
-    // Use a dummy audio track if new MediaStream() is empty
-    const call = peerRef.current.call(broadcasterId, new MediaStream());
+    // Create a dummy canvas stream to wake up PeerJS
+    const canvas = document.createElement('canvas');
+    canvas.width = 1; canvas.height = 1;
+    const dummyStream = canvas.captureStream();
+
+    const call = peerRef.current.call(broadcasterId, dummyStream, {
+      metadata: { type: 'viewer' }
+    });
+
+    console.log('Call initiated to:', broadcasterId);
 
     call.on('stream', (remoteStream) => {
       console.log('Received remote stream!');
@@ -78,7 +86,18 @@ const LiveViewerPage = () => {
         setLiveData(data);
 
         // Connect to the broadcaster
-        const peer = new Peer(null, { debug: 2 });
+        const peer = new Peer(null, {
+          debug: 1,
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun2.l.google.com:19302' },
+              { urls: 'stun:stun3.l.google.com:19302' },
+              { urls: 'stun:stun4.l.google.com:19302' }
+            ]
+          }
+        });
         peerRef.current = peer;
 
         peer.on('open', () => {

@@ -1,71 +1,26 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
-import { Search, Send, Paperclip, Smile, Award, ChevronLeft, MoreVertical, MessageSquare, ChevronRight, Trash2, AlertTriangle, Phone, Video, X, Mic, MicOff, VideoOff } from 'lucide-react';
+import { Search, Send, Paperclip, Smile, Award, ChevronLeft, MoreVertical, MessageSquare, ChevronRight, Trash2, AlertTriangle, Phone, Video, X } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext.jsx';
-import { supabase, subscribeChat, subscribePresence, markConversationRead } from '@/lib/supabaseClient.js';
+import { useCall } from '@/contexts/CallContext.jsx';
+import { supabase, subscribeChat, subscribePresence, markConversationRead, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
-import Peer from 'peerjs';
 
 const MessagesPage = () => {
   const { currentUser, fetchUnreadCount } = useAuth();
+  const { startCall } = useCall();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
   const [activeConv, setActiveConv] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
-  const [isCalling, setIsCalling] = useState(false);
-  const [callType, setCallType] = useState(null); // 'audio' or 'video'
-  const [callStatus, setCallStatus] = useState(null); // 'outgoing', 'incoming', 'connected'
-
-  const [peer, setPeer] = useState(null);
-  const [myPeerId, setMyPeerId] = useState(null);
-  const [localStream, setMyStream] = useState(null);
-  const [remoteStream, setOtherStream] = useState(null);
-  const myVideoRef = useRef(null);
-  const otherVideoRef = useRef(null);
-  const currentCallRef = useRef(null);
-
-  // Initialize PeerJS
-  useEffect(() => {
-    if (!currentUser?.id) return;
-
-    const newPeer = new Peer(currentUser.id.replace(/-/g, '')); // PeerJS prefers alphanumeric
-
-    newPeer.on('open', (id) => {
-      setMyPeerId(id);
-      console.log('My peer ID is: ' + id);
-    });
-
-    newPeer.on('call', async (incomingCall) => {
-      setCallType('video'); // Default to video for now
-      setCallStatus('incoming');
-      setIsCalling(true);
-      currentCallRef.current = incomingCall;
-    });
-
-    setPeer(newPeer);
-
-    return () => {
-      newPeer.destroy();
-    };
-  }, [currentUser?.id]);
-
-  useEffect(() => {
-    if (callStatus === 'connected' && otherVideoRef.current && remoteStream) {
-      otherVideoRef.current.srcObject = remoteStream;
-    }
-    if (isCalling && myVideoRef.current && localStream) {
-      myVideoRef.current.srcObject = localStream;
-    }
-  }, [callStatus, isCalling, localStream, remoteStream]);
 
   useEffect(() => {
     const fetchConvs = async () => {
@@ -137,7 +92,6 @@ const MessagesPage = () => {
     const otherUserId = activeConv.participant1_id === currentUser.id ? activeConv.participant2_id : activeConv.participant1_id;
 
     const unsubscribe = subscribePresence(activeConv.id, currentUser.id, (state) => {
-      // On vérifie si l'ID de l'autre utilisateur est présent dans les clés de l'état de présence
       const onlineUserIds = Object.keys(state);
       setIsOtherUserOnline(onlineUserIds.includes(otherUserId));
     });
@@ -149,33 +103,17 @@ const MessagesPage = () => {
 
   const handleDeleteConversation = async () => {
     if (!activeConv) return;
-
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action est irréversible.")) {
-      return;
-    }
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action est irréversible.")) return;
 
     try {
-      const { error } = await supabase
-        .from('conversations')
-        .delete()
-        .eq('id', activeConv.id);
-
+      const { error } = await supabase.from('conversations').delete().eq('id', activeConv.id);
       if (error) throw error;
-
       toast.success("Conversation supprimée");
       setConversations(prev => prev.filter(c => c.id !== activeConv.id));
       setActiveConv(null);
     } catch (err) {
-      console.error(err);
       toast.error("Erreur lors de la suppression");
     }
-  };
-
-  const getFileUrl = (bucket, path) => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-    return data.publicUrl;
   };
 
   const handleSend = async (e) => {
@@ -185,24 +123,18 @@ const MessagesPage = () => {
     const otherUserId = activeConv.participant1_id === currentUser.id ? activeConv.participant2_id : activeConv.participant1_id;
     
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('messages')
         .insert([{
           conversation_id: activeConv.id,
           sender_id: currentUser.id,
           recipient_id: otherUserId,
           content: newMessage
-        }])
-        .select()
-        .single();
+        }]);
       
       if (error) throw error;
-
-      // Local update is handled by Realtime subscription or manually
-      // setMessages([...messages, data]);
       setNewMessage('');
       
-      // Update conversation
       await supabase
         .from('conversations')
         .update({
@@ -217,176 +149,20 @@ const MessagesPage = () => {
     }
   };
 
-  const renderMessageContent = (content) => {
-    if (!content) return null;
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = content.split(urlRegex);
-
-    return parts.map((part, index) => {
-      if (part.match(urlRegex)) {
-        return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:opacity-80 break-all"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {part}
-          </a>
-        );
-      }
-      return part;
-    });
-  };
-
-  const handleStartCall = async (type) => {
-    if (!activeConv) return;
-    const otherUserId = (activeConv.participant1_id === currentUser.id ? activeConv.participant2_id : activeConv.participant1_id).replace(/-/g, '');
-
-    setCallType(type);
-    setIsCalling(true);
-    setCallStatus('outgoing');
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: type === 'video',
-        audio: true
-      });
-      setMyStream(stream);
-
-      const call = peer.call(otherUserId, stream);
-      currentCallRef.current = call;
-
-      call.on('stream', (userOtherStream) => {
-        setOtherStream(userOtherStream);
-        setCallStatus('connected');
-      });
-
-      call.on('close', () => endCall());
-
-    } catch (err) {
-      console.error("Call error:", err);
-      toast.error("Impossible d'accéder à la caméra/micro");
-      endCall();
+  const handleStartCall = (type) => {
+    const otherUser = activeConv.participant1_id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id;
+    if (otherUser) {
+      startCall(otherUser, type);
     }
-  };
-
-  const answerCall = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
-      setMyStream(stream);
-
-      currentCallRef.current.answer(stream);
-      currentCallRef.current.on('stream', (userOtherStream) => {
-        setOtherStream(userOtherStream);
-        setCallStatus('connected');
-      });
-    } catch (err) {
-      toast.error("Erreur micro/caméra");
-      endCall();
-    }
-  };
-
-  const endCall = () => {
-    if (currentCallRef.current) currentCallRef.current.close();
-    if (localStream) localStream.getTracks().forEach(track => track.stop());
-
-    setIsCalling(false);
-    setCallType(null);
-    setCallStatus(null);
-    setMyStream(null);
-    setOtherStream(null);
   };
 
   return (
     <>
       <Helmet><title>Messages - KLTUR RAP</title></Helmet>
-      <div className="h-screen flex flex-col bg-[#050505] overflow-hidden relative">
+      <div className="h-screen flex flex-col bg-[#050505] overflow-hidden">
         <Header />
 
-        {/* Call UI Overlay */}
-        <AnimatePresence>
-          {isCalling && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-              className="absolute inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center p-8"
-            >
-              <div className="relative mb-8">
-                <div className="absolute inset-0 bg-[#D4AF37] rounded-full blur-3xl opacity-20 animate-pulse" />
-                <Avatar className="h-32 w-32 border-4 border-[#D4AF37]">
-                   <AvatarFallback className="bg-[#111] text-[#D4AF37] text-4xl font-black">
-                      {(activeConv.expand?.participant1Id?.id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.username?.[0]}
-                   </AvatarFallback>
-                </Avatar>
-                {callType === 'video' && (
-                  <div className="absolute bottom-0 right-0 bg-green-500 p-2 rounded-full border-4 border-black">
-                    <Video className="w-5 h-5 text-white" />
-                  </div>
-                )}
-              </div>
-
-              <h2 className="text-2xl font-black text-white uppercase mb-1">
-                {(activeConv.expand?.participant1Id?.id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.username}
-              </h2>
-              <p className="text-[#D4AF37] font-bold uppercase tracking-widest text-xs mb-12 animate-pulse">
-                {callStatus === 'outgoing' ? 'Appel en cours...' : callStatus === 'incoming' ? 'Appel entrant...' : 'Connecté'}
-              </p>
-
-              <div className="flex gap-8 items-center">
-                 {callStatus === 'incoming' ? (
-                   <Button onClick={answerCall} className="h-20 w-20 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-2xl shadow-green-500/20">
-                      <Phone className="w-8 h-8" />
-                   </Button>
-                 ) : (
-                   <Button variant="outline" size="icon" className="h-16 w-16 rounded-full border-[#222] bg-[#111] text-white hover:bg-[#222]">
-                      <MicOff className="w-6 h-6" />
-                   </Button>
-                 )}
-
-                 <Button onClick={endCall} className="h-20 w-20 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-2xl shadow-red-500/20">
-                    <X className="w-8 h-8" />
-                 </Button>
-
-                 {callStatus !== 'incoming' && (
-                    <Button variant="outline" size="icon" className="h-16 w-16 rounded-full border-[#222] bg-[#111] text-white hover:bg-[#222]">
-                       <VideoOff className="w-6 h-6" />
-                    </Button>
-                 )}
-              </div>
-
-              {callType === 'video' && (
-                <div className="mt-10 flex flex-col items-center gap-4 w-full max-w-4xl px-4">
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full h-[300px]">
-                      <div className="relative bg-[#111] rounded-3xl border border-[#222] overflow-hidden">
-                         <video ref={myVideoRef} autoPlay muted playsInline className="w-full h-full object-cover mirror" />
-                         <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1 rounded-full text-[8px] font-black text-white uppercase">Moi</div>
-                      </div>
-                      <div className="relative bg-[#111] rounded-3xl border border-[#222] overflow-hidden">
-                         {callStatus === 'connected' ? (
-                           <video ref={otherVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                         ) : (
-                           <div className="flex items-center justify-center h-full text-white/10 uppercase font-black text-[10px] tracking-widest animate-pulse">
-                              En attente...
-                           </div>
-                         )}
-                         <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-widest">
-                            {(activeConv.expand?.participant1Id?.id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.username}
-                         </div>
-                      </div>
-                   </div>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         <main className="flex-grow flex max-w-7xl mx-auto w-full h-[calc(100vh-80px)] border-x border-[#222] bg-[#0a0a0a]">
-          {/* Conversation List View */}
           {!activeConv ? (
             <div className="w-full flex flex-col h-full animate-in fade-in duration-300">
               <div className="p-6 border-b border-[#222]">
@@ -408,14 +184,10 @@ const MessagesPage = () => {
                     {conversations.map(conv => {
                       const otherUser = conv.expand?.participant1Id?.id === currentUser.id ? conv.expand?.participant2Id : conv.expand?.participant1Id;
                       return (
-                        <div
-                          key={conv.id}
-                          onClick={() => setActiveConv(conv)}
-                          className="p-5 cursor-pointer hover:bg-[#111] transition-all flex items-center gap-4 group"
-                        >
+                        <div key={conv.id} onClick={() => setActiveConv(conv)} className="p-5 cursor-pointer hover:bg-[#111] transition-all flex items-center gap-4 group">
                           <div className="relative">
                             <Avatar className="h-14 w-14 border-2 border-[#222] group-hover:border-[#D4AF37]/50 transition-colors">
-                              <AvatarImage src={otherUser?.avatar ? getFileUrl('avatars', otherUser.avatar) : ''} />
+                              <AvatarImage src={getPublicImageUrl('avatars', otherUser?.avatar)} />
                               <AvatarFallback className="bg-[#222] text-[#D4AF37] font-bold text-lg">{otherUser?.username?.charAt(0) || 'U'}</AvatarFallback>
                             </Avatar>
                             {otherUser?.is_premium && (
@@ -426,16 +198,10 @@ const MessagesPage = () => {
                           </div>
                           <div className="flex-grow overflow-hidden">
                             <div className="flex justify-between items-center mb-1">
-                              <h4 className="font-black text-white text-base group-hover:text-[#D4AF37] transition-colors truncate">
-                                {otherUser?.username || otherUser?.name}
-                              </h4>
-                              <span className="text-[10px] font-bold text-white/30 uppercase">
-                                {new Date(conv.last_message_date || conv.updated_at).toLocaleDateString()}
-                              </span>
+                              <h4 className="font-black text-white text-base group-hover:text-[#D4AF37] transition-colors truncate">{otherUser?.username || otherUser?.name}</h4>
+                              <span className="text-[10px] font-bold text-white/30 uppercase">{new Date(conv.last_message_date || conv.updated_at).toLocaleDateString()}</span>
                             </div>
-                            <p className="text-sm text-white/50 truncate font-medium">
-                              {conv.last_message || 'Nouvelle conversation...'}
-                            </p>
+                            <p className="text-sm text-white/50 truncate font-medium">{conv.last_message || 'Nouvelle conversation...'}</p>
                           </div>
                           <ChevronRight className="w-5 h-5 text-white/10 group-hover:text-[#D4AF37] transition-all" />
                         </div>
@@ -446,15 +212,10 @@ const MessagesPage = () => {
               </div>
             </div>
           ) : (
-            /* Chat Detail View */
             <div className="w-full flex flex-col h-full bg-[#050505] animate-in slide-in-from-right duration-300">
-              {/* Chat Header */}
               <div className="p-4 border-b border-[#222] bg-[#0a0a0a] flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-4">
-                  <Button variant="ghost" size="icon" onClick={() => setActiveConv(null)} className="text-white/50 hover:text-white hover:bg-[#222] rounded-full">
-                    <ChevronLeft className="w-6 h-6" />
-                  </Button>
-
+                  <Button variant="ghost" size="icon" onClick={() => setActiveConv(null)} className="text-white/50 hover:text-white hover:bg-[#222] rounded-full"><ChevronLeft className="w-6 h-6" /></Button>
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <Avatar className="h-10 w-10 border border-[#222]">
@@ -462,20 +223,12 @@ const MessagesPage = () => {
                           const other = activeConv.expand?.participant1Id?.id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id;
                           return (
                             <>
-                              <AvatarImage src={other?.avatar ? getFileUrl('avatars', other.avatar) : ''} />
+                              <AvatarImage src={getPublicImageUrl('avatars', other?.avatar)} />
                               <AvatarFallback className="bg-[#222] text-[#D4AF37] font-bold">{other?.username?.charAt(0) || 'U'}</AvatarFallback>
                             </>
                           );
                         })()}
                       </Avatar>
-                      {(() => {
-                        const other = activeConv.expand?.participant1Id?.id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id;
-                        return other?.is_premium && (
-                          <div className="absolute -bottom-1 -right-1 bg-black rounded-full p-0.5 border border-[#222]">
-                            <Award className="w-3 h-3 text-[#D4AF37] fill-[#D4AF37]/20" />
-                          </div>
-                        );
-                      })()}
                     </div>
                     <div>
                       <h3 className="font-black text-white leading-none text-sm uppercase tracking-tight">
@@ -484,105 +237,50 @@ const MessagesPage = () => {
                           return other?.username || other?.name || 'Utilisateur';
                         })()}
                       </h3>
-                      <p className={`text-[10px] font-bold mt-1 uppercase tracking-widest ${isOtherUserOnline ? 'text-[#D4AF37]' : 'text-white/20'}`}>
-                        {isOtherUserOnline ? 'En ligne' : 'Hors ligne'}
-                      </p>
+                      <p className={`text-[10px] font-bold mt-1 uppercase tracking-widest ${isOtherUserOnline ? 'text-[#D4AF37]' : 'text-white/20'}`}>{isOtherUserOnline ? 'En ligne' : 'Hors ligne'}</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => handleStartCall('audio')} className="text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-full">
-                    <Phone className="w-5 h-5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleStartCall('video')} className="text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-full">
-                    <Video className="w-5 h-5" />
-                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleStartCall('audio')} className="text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-full"><Phone className="w-5 h-5" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleStartCall('video')} className="text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-full"><Video className="w-5 h-5" /></Button>
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="text-white/20 hover:text-white rounded-full">
-                        <MoreVertical className="w-5 h-5" />
-                      </Button>
+                      <Button variant="ghost" size="icon" className="text-white/20 hover:text-white rounded-full"><MoreVertical className="w-5 h-5" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-[#111] border-[#222] text-white">
-                      <DropdownMenuItem
-                        onClick={() => navigate(`/profil/${(activeConv.participant1_id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.id}`)}
-                        className="cursor-pointer"
-                      >
-                        Voir le profil
-                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/profil/${(activeConv.participant1_id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.id}`)} className="cursor-pointer">Voir le profil</DropdownMenuItem>
                       <DropdownMenuSeparator className="bg-[#222]" />
-                      <DropdownMenuItem
-                        onClick={handleDeleteConversation}
-                        className="text-red-500 cursor-pointer focus:text-red-500"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Supprimer la conversation
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-white/50 cursor-pointer">
-                        <AlertTriangle className="w-4 h-4 mr-2" />
-                        Signaler
-                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleDeleteConversation} className="text-red-500 cursor-pointer focus:text-red-500"><Trash2 className="w-4 h-4 mr-2" />Supprimer</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
               </div>
 
-              {/* Messages Area */}
-              <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
+              <div className="flex-grow overflow-y-auto p-6 space-y-6">
                 {messages.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-white/10 text-[10px] font-bold uppercase tracking-[0.3em]">
-                    Début de la conversation
-                  </div>
+                  <div className="h-full flex items-center justify-center text-white/10 text-[10px] font-bold uppercase tracking-[0.3em]">Début de la conversation</div>
                 ) : messages.map((msg, idx) => {
                   const isMe = msg.sender_id === currentUser.id;
-                  const showDate = idx === 0 || new Date(messages[idx-1].created_at).toDateString() !== new Date(msg.created_at).toDateString();
-
                   return (
-                    <React.Fragment key={msg.id}>
-                      {showDate && (
-                        <div className="flex justify-center my-4">
-                          <span className="text-[9px] font-black text-white/20 bg-white/5 px-3 py-1 rounded-full uppercase tracking-widest">
-                            {new Date(msg.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                          </span>
+                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                      <div className={`max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                        <div className={`px-4 py-3 rounded-2xl text-sm shadow-xl ${isMe ? 'bg-[#D4AF37] text-black font-medium rounded-tr-none' : 'bg-[#111] text-white border border-[#222] rounded-tl-none'}`}>
+                          <div className="whitespace-pre-wrap break-words">{msg.content}</div>
                         </div>
-                      )}
-                      <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                        <div className={`max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                          <div className={`px-4 py-3 rounded-2xl text-sm shadow-xl ${
-                            isMe
-                              ? 'bg-[#D4AF37] text-black font-medium rounded-tr-none'
-                              : 'bg-[#111] text-white border border-[#222] rounded-tl-none'
-                          }`}>
-                            <div className="whitespace-pre-wrap break-words">{renderMessageContent(msg.content)}</div>
-                          </div>
-                          <span className="text-[9px] mt-1.5 font-bold text-white/20 uppercase tracking-tighter">
-                            {new Date(msg.created_at || msg.created).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          </span>
-                        </div>
+                        <span className="text-[9px] mt-1.5 font-bold text-white/20 uppercase tracking-tighter">{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                       </div>
-                    </React.Fragment>
+                    </div>
                   );
                 })}
               </div>
 
-              {/* Chat Input */}
               <div className="p-4 bg-[#0a0a0a] border-t border-[#222]">
                 <form onSubmit={handleSend} className="flex items-center gap-3 max-w-4xl mx-auto">
-                  <div className="flex-grow relative">
-                    <Input 
-                      value={newMessage} onChange={e => setNewMessage(e.target.value)}
-                      placeholder="Votre message..."
-                      className="w-full bg-[#111] border-[#222] text-white rounded-2xl h-14 px-5 pr-12 focus:border-[#D4AF37] transition-all"
-                    />
-                    <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 hover:text-[#D4AF37] transition-colors">
-                      <Smile className="w-6 h-6" />
-                    </button>
-                  </div>
-                  <Button type="submit" disabled={!newMessage.trim()} className="bg-[#D4AF37] text-black hover:bg-[#b5952f] rounded-2xl h-14 w-14 p-0 shadow-lg gold-glow flex items-center justify-center shrink-0 transition-transform active:scale-95">
-                    <Send className="w-6 h-6" />
-                  </Button>
+                  <Input value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Votre message..." className="w-full bg-[#111] border-[#222] text-white rounded-2xl h-14 px-5 focus:border-[#D4AF37]" />
+                  <Button type="submit" disabled={!newMessage.trim()} className="bg-[#D4AF37] text-black rounded-2xl h-14 w-14 shadow-lg gold-glow shrink-0"><Send className="w-6 h-6" /></Button>
                 </form>
               </div>
             </div>

@@ -124,10 +124,13 @@ const Header = () => {
         <div className="flex items-center justify-between h-20 gap-4">
           <Link to="/" className="flex items-center gap-3 group shrink-0">
             <img
-              src="/logo-kltur.png"
+              src="/icon-only.PNG"
               alt="KLTUR RAP Logo"
               className="h-14 w-auto transition-transform duration-300 group-hover:scale-105 drop-shadow-[0_0_10px_rgba(212,175,55,0.3)]"
             />
+            <span className="text-xl font-black text-[#D4AF37] tracking-tight hidden sm:block uppercase">
+              KLTUR RAP
+            </span>
           </Link>
 
           {/* Global Search Bar */}
