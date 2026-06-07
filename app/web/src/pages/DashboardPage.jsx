@@ -845,7 +845,8 @@ const DashboardPage = () => {
                              Votre rémunération dépend du volume total d'abonnements <strong>Auditeur Premium</strong> sur la plateforme.
                              Nous prélevons <strong>50% (soit 1500 FCFA par abonné)</strong> que nous redistribuons équitablement entre tous les artistes.
                              Votre part est proportionnelle à vos écoutes par rapport au total des écoutes de la plateforme.
-                             Plus vous êtes écouté, plus la valeur de votre part augmente !
+                             <br /><br />
+                             Note : Les abonnements <strong>Artistes</strong> (Standard et Premium) servent au fonctionnement technique de l'application et à la mise en avant de vos projets.
                           </p>
                        </div>
                     </div>

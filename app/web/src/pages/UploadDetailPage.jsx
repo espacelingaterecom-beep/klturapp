@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit, CheckCircle, CheckCircle2, WifiOff, ShieldCheck } from 'lucide-react';
+import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit, CheckCircle, CheckCircle2, WifiOff, ShieldCheck, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -437,11 +437,14 @@ const UploadDetailPage = () => {
   const isOwner = currentUser?.id === artist?.id;
 
   const getBadge = (user) => {
+    if (user?.subscription_type === 'artist_premium') {
+      return <Trophy className="w-3.5 h-3.5 text-[#D4AF37] drop-shadow-[0_0_5px_rgba(212,175,55,0.8)]" title="Artiste Élite" />;
+    }
     if (user?.subscription_type === 'artist' || user?.is_premium && !user?.subscription_type) {
-      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" />;
+      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" title="Artiste Certifié" />;
     }
     if (user?.subscription_type === 'auditor') {
-      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />;
+      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" title="Auditeur Premium" />;
     }
     return null;
   };

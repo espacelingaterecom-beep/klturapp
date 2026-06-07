@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, BarChart3, Newspaper, Radio, Trophy, Settings, TrendingUp, DollarSign, FileSpreadsheet, FileText, DownloadCloud, Wallet, ShieldCheck, LayoutDashboard } from 'lucide-react';
+import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Award, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, ChevronDown, BarChart3, Newspaper, Radio, Trophy, Settings, TrendingUp, DollarSign, FileSpreadsheet, FileText, DownloadCloud, Wallet, ShieldCheck, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import Header from '@/components/Header.jsx';
@@ -375,11 +375,43 @@ const AdminDashboard = () => {
     setEventImagePreview(null);
   };
 
-  const toggleUserPremium = async (userId, currentStatus) => {
-    const { error } = await supabase.from('profiles').update({ is_premium: !currentStatus }).eq('id', userId);
-    if (!error) {
-      toast.success("Statut premium mis à jour");
+  const activateUserSubscription = async (userId, type) => {
+    const loadingToast = toast.loading("Activation de l'abonnement...");
+    try {
+      const expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_premium: true,
+          subscription_type: type,
+          premium_until: expiryDate.toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      toast.success("Abonnement activé pour 1 mois !", { id: loadingToast });
       loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de l'activation", { id: loadingToast });
+    }
+  };
+
+  const toggleUserPremium = async (userId, currentStatus) => {
+    if (currentStatus) {
+      const { error } = await supabase.from('profiles').update({
+        is_premium: false,
+        subscription_type: 'free',
+        premium_until: null
+      }).eq('id', userId);
+
+      if (!error) {
+        toast.success("Certification retirée");
+        loadAllData();
+      }
     }
   };
 
@@ -625,6 +657,27 @@ const AdminDashboard = () => {
                    </DropdownMenuItem>
                    <DropdownMenuItem onClick={() => exportToCSV(news, 'News_KLTUR')} className="cursor-pointer">
                       <Newspaper className="w-4 h-4 mr-2" /> Actualités
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(radioEpisodes, 'Radio_KLTUR')} className="cursor-pointer">
+                      <Radio className="w-4 h-4 mr-2" /> Épisodes Radio
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(payoutRequests, 'Retraits_KLTUR')} className="cursor-pointer">
+                      <Wallet className="w-4 h-4 mr-2" /> Demandes de Retrait
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(subscriptionRequests, 'Abonnements_KLTUR')} className="cursor-pointer">
+                      <ShieldCheck className="w-4 h-4 mr-2" /> Demandes d'Abonnement
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(users.filter(u => u.is_admin), 'Equipe_KLTUR')} className="cursor-pointer">
+                      <Shield className="w-4 h-4 mr-2" /> Membres de l'Équipe
+                   </DropdownMenuItem>
+                   <DropdownMenuSeparator className="bg-[#222]" />
+                   <DropdownMenuItem onClick={() => {
+                      exportToCSV(users, 'Export_Global_Users');
+                      exportToCSV(contents, 'Export_Global_Content');
+                      exportToCSV(payoutRequests, 'Export_Global_Payouts');
+                      toast.success("Export global lancé (plusieurs fichiers)");
+                   }} className="cursor-pointer font-black text-[#D4AF37]">
+                      <DownloadCloud className="w-4 h-4 mr-2" /> TOUT EXPORTER (ZIP-like)
                    </DropdownMenuItem>
                 </DropdownMenuContent>
              </DropdownMenu>
@@ -1070,13 +1123,46 @@ const AdminDashboard = () => {
                           {u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : 'Inconnue'}
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <Button
-                            size="sm" variant="outline"
-                            onClick={() => toggleUserPremium(u.id, u.is_premium)}
-                            className={`rounded-xl font-bold text-[10px] uppercase h-10 ${u.is_premium ? "border-red-500/20 text-red-400 hover:bg-red-500/10" : "border-[#D4AF37]/20 text-[#D4AF37] hover:bg-[#D4AF37]/10"}`}
-                          >
-                            {u.is_premium ? 'Retirer Certif.' : 'Certifier Membre'}
-                          </Button>
+                          {u.is_premium ? (
+                            <Button
+                              size="sm" variant="outline"
+                              onClick={() => toggleUserPremium(u.id, u.is_premium)}
+                              className="rounded-xl font-bold text-[10px] uppercase h-10 border-red-500/20 text-red-400 hover:bg-red-500/10"
+                            >
+                              Retirer Certif.
+                            </Button>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="bg-[#D4AF37] text-black font-bold text-[10px] uppercase h-10 rounded-xl hover:bg-[#b5952f]"
+                                >
+                                  Certifier Membre <ChevronDown className="ml-2 w-3 h-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-[#111] border-[#222] text-white w-48">
+                                <DropdownMenuItem
+                                  onClick={() => activateUserSubscription(u.id, 'auditor')}
+                                  className="cursor-pointer focus:bg-blue-500/20 focus:text-blue-400"
+                                >
+                                  <ShieldCheck className="w-4 h-4 mr-2 text-blue-400" /> Auditeur Premium
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => activateUserSubscription(u.id, 'artist')}
+                                  className="cursor-pointer focus:bg-[#D4AF37]/20 focus:text-[#D4AF37]"
+                                >
+                                  <Award className="w-4 h-4 mr-2 text-[#D4AF37]" /> Artiste Standard
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => activateUserSubscription(u.id, 'artist_premium')}
+                                  className="cursor-pointer focus:bg-[#D4AF37]/30 focus:text-[#D4AF37] font-bold"
+                                >
+                                  <Trophy className="w-4 h-4 mr-2 text-[#D4AF37]" /> Artiste Premium
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </td>
                       </tr>
                     ))}

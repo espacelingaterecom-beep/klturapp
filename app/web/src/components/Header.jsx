@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield, WifiOff, LayoutDashboard, Plus, ShieldCheck } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield, WifiOff, LayoutDashboard, Plus, ShieldCheck, Trophy, Crown } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -104,11 +104,14 @@ const Header = () => {
   };
 
   const getBadge = (user) => {
-    if (user?.subscription_type === 'artist' || user?.is_premium && !user?.subscription_type) {
-      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" />;
+    if (user?.subscription_type === 'artist_premium') {
+      return <Trophy className="w-3.5 h-3.5 text-[#D4AF37] drop-shadow-[0_0_5px_rgba(212,175,55,0.8)]" title="Artiste Élite" />;
+    }
+    if (user?.subscription_type === 'artist' || (user?.is_premium && !user?.subscription_type)) {
+      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" title="Artiste Certifié" />;
     }
     if (user?.subscription_type === 'auditor') {
-      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />;
+      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" title="Auditeur Premium" />;
     }
     return null;
   };

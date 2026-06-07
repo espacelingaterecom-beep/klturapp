@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Award, Music, Play, Eye, Download, UserPlus, MessageSquare, Edit2, Globe, Youtube, Facebook, Instagram, Twitter, Image as ImageIcon, Heart, Repeat2, Video, MessageCircle, Ghost, Apple, Music2, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Award, Music, Play, Eye, Download, UserPlus, MessageSquare, Edit2, Globe, Youtube, Facebook, Instagram, Twitter, Image as ImageIcon, Heart, Repeat2, Video, MessageCircle, Ghost, Apple, Music2, ShieldCheck, CheckCircle2, Trophy, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -221,6 +221,9 @@ const PublicArtistProfilePage = () => {
   };
 
   const getBadge = (user) => {
+    if (user?.subscription_type === 'artist_premium') {
+      return <Trophy className="w-6 h-6 text-[#D4AF37] drop-shadow-[0_0_8px_rgba(212,175,55,1)]" title="Artiste Élite" />;
+    }
     if (user?.subscription_type === 'artist' || user?.is_premium && !user?.subscription_type) {
       return <Award className="w-6 h-6 text-[#D4AF37]" title="Artiste Certifié" />;
     }
