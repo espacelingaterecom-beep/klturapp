@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
   Play, Eye, Download, Search, Award, Users, Star, Music,
-  CheckCircle2, ChevronRight, Mic2, Video, TrendingUp
+  CheckCircle2, ChevronRight, Mic2, Video, TrendingUp, Trophy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
@@ -15,15 +15,20 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const MusiquePage = () => {
   const { currentUser, isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
   const [forYouArtists, setForYouArtists] = useState([]);
   const [worldContent, setWorldArtistsContent] = useState([]);
+  const [topOfTheWeek, setTopOfTheWeek] = useState([]);
   const [trendingMusic, setTrendingMusic] = useState([]);
   const [allMusic, setAllMusic] = useState([]);
   const [search, setSearch] = useState('');
+  const [genreFilter, setGenreFilter] = useState('all');
+
+  const genres = ['Rap', 'Hip-Hop', 'Trap', 'Drill', 'R&B', 'Afrobeat', 'Autres'];
 
   const getFileUrl = (bucket, path) => {
     if (!path) return '';
@@ -46,7 +51,6 @@ const MusiquePage = () => {
         setForYouArtists(artistsData || []);
 
         // 2. Fetch "KLTUR RAP WORLD" - Only from @KLTUR RAP account
-        // First find the KLTUR RAP profile
         const { data: worldProfile } = await supabase
           .from('profiles')
           .select('id')
@@ -63,7 +67,24 @@ const MusiquePage = () => {
           setWorldArtistsContent(worldContentData || []);
         }
 
-        // 3. Fetch Trending Music (Most viewed)
+        // 3. Fetch Top of the Week (Fallback to likes if RPC missing)
+        try {
+          const { data: voteAggregation } = await supabase.rpc('get_top_voted_tracks');
+          if (voteAggregation && voteAggregation.length > 0) {
+            setTopOfTheWeek(voteAggregation);
+          } else {
+            throw new Error("No votes yet");
+          }
+        } catch (e) {
+          const { data: fallbackTop } = await supabase
+            .from('uploads')
+            .select('*, profiles:user_id(*)')
+            .order('likes_count', { ascending: false })
+            .limit(3);
+          setTopOfTheWeek(fallbackTop || []);
+        }
+
+        // 4. Fetch Trending Music (Most viewed)
         const { data: trendingData } = await supabase
           .from('uploads')
           .select('*, profiles:user_id(*)')
@@ -71,31 +92,35 @@ const MusiquePage = () => {
           .limit(10);
         setTrendingMusic(trendingData || []);
 
-        // 4. Fetch All Music
-        const { data: musicData } = await supabase
+        // 5. Fetch All Music
+        let musicQuery = supabase
           .from('uploads')
-          .select('*, profiles:user_id(*)')
+          .select('*, profiles:user_id(*)');
+
+        if (genreFilter !== 'all') {
+          musicQuery = musicQuery.eq('genre', genreFilter);
+        }
+
+        const { data: musicData } = await musicQuery
           .order('created_at', { ascending: false })
           .limit(20);
         setAllMusic(musicData || []);
 
       } catch (err) {
         console.error("Music Page Error:", err);
-        toast.error("Erreur lors du chargement de la musique.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [genreFilter]);
 
   const handleFollow = async (artistId) => {
     if (!isAuthenticated) {
       toast.error("Connectez-vous pour suivre cet artiste");
       return;
     }
-    // Logic for follow...
     toast.success("Abonnement réussi !");
   };
 
@@ -109,6 +134,88 @@ const MusiquePage = () => {
         <Header />
 
         <main className="flex-grow py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-20">
+
+          {/* TOP DE LA SEMAINE - PODIUM */}
+          <section className="space-y-12">
+             <div className="text-center">
+                <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter mb-4">
+                  <span className="text-[#D4AF37]">Top</span> de la semaine
+                </h2>
+                <p className="text-white/40 font-bold uppercase text-[10px] tracking-[0.3em]">Le classement officiel voté par la communauté</p>
+             </div>
+
+             <div className="flex flex-col md:flex-row items-end justify-center gap-6 md:gap-0 max-w-5xl mx-auto pt-10">
+                {/* 2nd Place */}
+                <div className="order-2 md:order-1 w-full md:w-1/3">
+                   {topOfTheWeek[1] && (
+                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-[#0a0a0a] rounded-t-[40px] border border-[#222] p-8 text-center relative pt-20 border-b-0 h-[380px] flex flex-col items-center">
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                           <div className="relative">
+                              <Avatar className="h-28 w-28 border-4 border-[#222]">
+                                 <AvatarImage src={getFileUrl('covers', topOfTheWeek[1].cover_art)} />
+                              </Avatar>
+                              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#C0C0C0] text-black h-8 w-8 rounded-full flex items-center justify-center font-black border-4 border-[#0a0a0a]">2</div>
+                           </div>
+                        </div>
+                        <h3 className="font-black text-white text-xl truncate w-full mb-1">{topOfTheWeek[1].title}</h3>
+                        <p className="text-xs text-white/40 font-bold uppercase mb-6">@{topOfTheWeek[1].profiles?.username}</p>
+                        <Button asChild variant="outline" className="mt-auto border-white/10 rounded-full px-8">
+                           <Link to={`/uploads/${topOfTheWeek[1].id}`}>Écouter</Link>
+                        </Button>
+                     </motion.div>
+                   )}
+                </div>
+
+                {/* 1st Place */}
+                <div className="order-1 md:order-2 w-full md:w-[40%] z-10">
+                   {topOfTheWeek[0] && (
+                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-[#0f0f0f] rounded-t-[50px] border-2 border-[#D4AF37]/30 p-10 text-center relative pt-24 border-b-0 h-[450px] flex flex-col items-center gold-glow">
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                           <div className="relative">
+                              <div className="absolute inset-0 bg-[#D4AF37] rounded-full blur-2xl opacity-20 animate-pulse" />
+                              <Avatar className="h-36 w-36 border-4 border-[#D4AF37]">
+                                 <AvatarImage src={getFileUrl('covers', topOfTheWeek[0].cover_art)} />
+                              </Avatar>
+                              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#D4AF37] text-black h-12 w-12 rounded-full flex items-center justify-center text-xl font-black border-4 border-[#0f0f0f]">1</div>
+                           </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-[#D4AF37] mb-4">
+                           <Trophy className="w-5 h-5 fill-current" />
+                           <span className="font-black uppercase text-xs tracking-widest">Champion de la semaine</span>
+                        </div>
+                        <h3 className="font-black text-white text-2xl truncate w-full mb-1">{topOfTheWeek[0].title}</h3>
+                        <p className="text-sm text-white/40 font-bold uppercase mb-8">@{topOfTheWeek[0].profiles?.username}</p>
+                        <Button asChild className="mt-auto bg-[#D4AF37] text-black hover:bg-[#b5952f] rounded-full px-12 h-14 font-black uppercase tracking-wider text-lg">
+                           <Link to={`/uploads/${topOfTheWeek[0].id}`}>Écouter le TOP 1</Link>
+                        </Button>
+                     </motion.div>
+                   )}
+                </div>
+
+                {/* 3rd Place */}
+                <div className="order-3 md:order-3 w-full md:w-1/3">
+                   {topOfTheWeek[2] && (
+                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-[#0a0a0a] rounded-t-[40px] border border-[#222] p-8 text-center relative pt-20 border-b-0 h-[330px] flex flex-col items-center">
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                           <div className="relative">
+                              <Avatar className="h-24 w-24 border-4 border-[#222]">
+                                 <AvatarImage src={getFileUrl('covers', topOfTheWeek[2].cover_art)} />
+                              </Avatar>
+                              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#CD7F32] text-black h-8 w-8 rounded-full flex items-center justify-center font-black border-4 border-[#0a0a0a]">3</div>
+                           </div>
+                        </div>
+                        <h3 className="font-black text-white text-lg truncate w-full mb-1">{topOfTheWeek[2].title}</h3>
+                        <p className="text-xs text-white/40 font-bold uppercase mb-6">@{topOfTheWeek[2].profiles?.username}</p>
+                        <Button asChild variant="outline" className="mt-auto border-white/10 rounded-full px-8">
+                           <Link to={`/uploads/${topOfTheWeek[2].id}`}>Écouter</Link>
+                        </Button>
+                     </motion.div>
+                   )}
+                </div>
+             </div>
+             {/* Podium Base */}
+             <div className="hidden md:block h-4 w-full max-w-5xl mx-auto bg-gradient-to-r from-transparent via-[#222] to-transparent rounded-full shadow-2xl" />
+          </section>
 
           {/* Hero / Header */}
           <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#111] to-black border border-white/5 p-8 md:p-16">
@@ -279,11 +386,28 @@ const MusiquePage = () => {
 
           {/* 4. TOUTE LA MUSIQUE */}
           <section className="space-y-10 pb-20">
-             <div className="flex items-center justify-between px-2">
+             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
                 <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tight flex items-center gap-3">
                    <Music className="w-8 h-8 text-[#D4AF37]" /> Bibliothèque Globale
                 </h2>
-                <Link to="/galerie-uploads" className="text-white/40 hover:text-white font-bold text-xs uppercase tracking-widest transition-colors">Explorer tout</Link>
+
+                <div className="flex flex-wrap gap-2">
+                   <button
+                     onClick={() => setGenreFilter('all')}
+                     className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${genreFilter === 'all' ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#111] text-white/40 border-white/5 hover:border-white/20'}`}
+                   >
+                     Tous
+                   </button>
+                   {genres.map(g => (
+                      <button
+                        key={g}
+                        onClick={() => setGenreFilter(g)}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${genreFilter === g ? 'bg-[#D4AF37] text-black border-[#D4AF37]' : 'bg-[#111] text-white/40 border-white/5 hover:border-white/20'}`}
+                      >
+                        {g}
+                      </button>
+                   ))}
+                </div>
              </div>
 
              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 px-2">

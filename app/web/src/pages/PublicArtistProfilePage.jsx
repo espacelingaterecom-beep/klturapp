@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Award, Music, Play, Eye, Download, UserPlus, MessageSquare, Edit2, Globe, Youtube, Facebook, Instagram, Twitter, Image as ImageIcon, Heart, Repeat2, Video, MessageCircle, Ghost } from 'lucide-react';
+import { Award, Music, Play, Eye, Download, UserPlus, MessageSquare, Edit2, Globe, Youtube, Facebook, Instagram, Twitter, Image as ImageIcon, Heart, Repeat2, Video, MessageCircle, Ghost, Apple, Music2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -220,6 +220,19 @@ const PublicArtistProfilePage = () => {
     return { background: '#111111' };
   };
 
+  const getSocialIcon = (platform) => {
+    const p = platform.toLowerCase();
+    if (p.includes('facebook')) return <Facebook className="w-5 h-5" />;
+    if (p.includes('instagram')) return <Instagram className="w-5 h-5" />;
+    if (p.includes('twitter') || p === 'x') return <Twitter className="w-5 h-5" />;
+    if (p.includes('youtube')) return <Youtube className="w-5 h-5" />;
+    if (p.includes('spotify') || p.includes('music')) return <Music2 className="w-5 h-5" />;
+    if (p.includes('apple')) return <Apple className="w-5 h-5" />;
+    if (p.includes('whatsapp')) return <MessageCircle className="w-5 h-5" />;
+    if (p.includes('tiktok') || p.includes('snapchat')) return <Ghost className="w-5 h-5" />;
+    return <Globe className="w-5 h-5" />;
+  };
+
   return (
     <>
       <Helmet><title>{artist?.username || artist?.name || 'Artiste'} - KLTUR RAP</title></Helmet>
@@ -287,7 +300,7 @@ const PublicArtistProfilePage = () => {
                   </div>
 
                   {/* Socials */}
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
                     {artist?.website && (
                       <a href={artist.website} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-[#111] border border-[#222] flex items-center justify-center text-white/50 hover:text-[#D4AF37] hover:border-[#D4AF37] transition-all" title="Site Web">
                         <Globe className="w-5 h-5" />
@@ -295,9 +308,17 @@ const PublicArtistProfilePage = () => {
                     )}
                     {artist?.social_links && Object.entries(artist.social_links).map(([platform, url]) => {
                       if (!url) return null;
+                      const fullUrl = url.startsWith('http') ? url : `https://${url}`;
                       return (
-                        <a key={platform} href={url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-[#111] border border-[#222] flex items-center justify-center text-white/50 hover:text-[#D4AF37] transition-all">
-                          <Globe className="w-5 h-5" />
+                        <a
+                          key={platform}
+                          href={fullUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-10 h-10 rounded-full bg-[#111] border border-[#222] flex items-center justify-center text-white/50 hover:text-[#D4AF37] hover:border-[#D4AF37] transition-all"
+                          title={platform}
+                        >
+                          {getSocialIcon(platform)}
                         </a>
                       );
                     })}

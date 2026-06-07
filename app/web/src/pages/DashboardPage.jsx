@@ -40,6 +40,7 @@ const DashboardPage = () => {
   const [stats, setStats] = useState({
     total: 0,
     views: 0,
+    premiumViews: 0,
     followers: 0,
     likes: 0,
     downloads: 0,
@@ -79,7 +80,14 @@ const DashboardPage = () => {
         const last7Days = new Date();
         last7Days.setDate(last7Days.getDate() - 7);
 
-        const [uploadsResult, followersResult, commentsResult, premiumUsersResult, totalStreamsResult, payoutsResult, recentLikesResult, recentFollowersResult] = await Promise.all([
+        // First fetch projects and posts IDs to filter logs
+        const { data: myProjects } = await supabase.from('uploads').select('id').eq('user_id', currentUser.id);
+        const { data: myPosts } = await supabase.from('posts').select('id').eq('user_id', currentUser.id);
+
+        const projectIds = (myProjects || []).map(p => p.id);
+        const postIds = (myPosts || []).map(p => p.id);
+
+        const [uploadsResult, followersResult, commentsResult, premiumUsersResult, totalStreamsResult, payoutsResult, recentLikesResult, recentFollowersResult, recentViewsResult] = await Promise.all([
           supabase
             .from('uploads')
             .select('*', { count: 'exact' })
@@ -100,7 +108,7 @@ const DashboardPage = () => {
             .eq('is_premium', true),
           supabase
             .from('uploads')
-            .select('view_count'),
+            .select('premium_view_count'),
           supabase
             .from('payout_requests')
             .select('*')
@@ -115,7 +123,12 @@ const DashboardPage = () => {
             .from('followers')
             .select('created_at')
             .eq('following_id', currentUser.id)
+            .gte('created_at', last7Days.toISOString()),
+          supabase
+            .from('views_log')
+            .select('created_at, content_id')
             .gte('created_at', last7Days.toISOString())
+            .or(`content_id.in.(${[...projectIds, ...postIds].join(',')})`)
         ]);
 
         if (uploadsResult.error) throw uploadsResult.error;
@@ -130,6 +143,7 @@ const DashboardPage = () => {
         setPayoutHistory(payoutsResult.data || []);
 
         const totalViews = uploadsData.reduce((acc, curr) => acc + (curr.view_count || 0), 0);
+        const totalPremiumViews = uploadsData.reduce((acc, curr) => acc + (curr.premium_view_count || 0), 0);
         const totalLikes = uploadsData.reduce((acc, curr) => acc + (curr.likes_count || 0), 0);
         const totalDownloads = uploadsData.reduce((acc, curr) => acc + (curr.download_count || 0), 0);
 
@@ -144,22 +158,25 @@ const DashboardPage = () => {
 
           const dayLikes = (recentLikesResult.data || []).filter(l => l.created_at.startsWith(dateStr)).length;
           const dayFollows = (recentFollowersResult.data || []).filter(f => f.created_at.startsWith(dateStr)).length;
+          const dayViews = (recentViewsResult.data || []).filter(v => v.created_at.startsWith(dateStr)).length;
 
           chartData.push({
             name: dayName,
-            v: (dayLikes * 10) + (dayFollows * 5), // Simulated performance index based on real interactions
+            v: (dayLikes * 10) + (dayFollows * 5) + dayViews,
             likes: dayLikes,
-            follows: dayFollows
+            follows: dayFollows,
+            views: dayViews
           });
         }
         setPerformanceData(chartData);
 
         // Calculate global platform stats for revenue
-        const platformPremiumStreams = (totalStreamsResult.data || []).reduce((acc, curr) => acc + (curr.view_count || 0), 0);
+        const platformPremiumStreams = (totalStreamsResult.data || []).reduce((acc, curr) => acc + (curr.premium_view_count || 0), 0);
 
         setStats({
           total: uploadsResult.count || 0,
           views: totalViews,
+          premiumViews: totalPremiumViews,
           followers: followersResult.count || 0,
           likes: totalLikes,
           downloads: totalDownloads,
@@ -194,7 +211,7 @@ const DashboardPage = () => {
   };
 
   const handleCashout = async () => {
-    const estimatedGains = Math.round((stats.views / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000));
+    const estimatedGains = Math.round((stats.premiumViews / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000));
 
     if (estimatedGains < 5000) {
       toast.error("Le montant minimum de retrait est de 5000 FCFA.");
@@ -648,7 +665,8 @@ const DashboardPage = () => {
                                  <YAxis stroke="#444" fontSize={10} fontWeight="bold" />
                                  <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '12px' }} />
                                  <Area type="monotone" dataKey="likes" name="Nouveaux Likes" stroke="#D4AF37" fillOpacity={1} fill="url(#colorV)" strokeWidth={3} />
-                                 <Area type="monotone" dataKey="follows" name="Nouveaux Abonnés" stroke="#fff" fillOpacity={0.1} fill="#fff" strokeWidth={2} />
+                                 <Area type="monotone" dataKey="views" name="Vues" stroke="#fff" fillOpacity={0.1} fill="#fff" strokeWidth={2} />
+                                 <Area type="monotone" dataKey="follows" name="Nouveaux Abonnés" stroke="#3b82f6" fillOpacity={0} strokeWidth={2} strokeDasharray="5 5" />
                               </AreaChart>
                            </ResponsiveContainer>
                         </CardContent>
@@ -745,7 +763,7 @@ const DashboardPage = () => {
                                <p className="text-white/40 text-xs font-black uppercase tracking-[0.2em] mb-4">Total de vos revenus estimés</p>
                                <div className="flex items-baseline gap-4 mb-2">
                                   <h2 className="text-6xl font-black tracking-tighter text-[#D4AF37]">
-                                    {Math.round((stats.views / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000)).toLocaleString()}
+                                    {Math.round((stats.premiumViews / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000)).toLocaleString()}
                                   </h2>
                                   <span className="text-2xl font-black uppercase tracking-widest text-white/20">FCFA</span>
                                </div>
@@ -764,7 +782,7 @@ const DashboardPage = () => {
                             <div className="grid grid-cols-2 gap-6">
                                <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
                                   <p className="text-[10px] font-black uppercase text-white/30 mb-2">Écoutes Premium</p>
-                                  <p className="text-2xl font-black">{stats.views}</p>
+                                  <p className="text-2xl font-black">{stats.premiumViews}</p>
                                </div>
                                <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
                                   <p className="text-[10px] font-black uppercase text-white/30 mb-2">Part Artiste (60%)</p>
@@ -894,7 +912,7 @@ const DashboardPage = () => {
              <div className="bg-[#111] p-4 rounded-xl border border-[#222] flex items-center justify-between">
                 <span className="text-sm font-bold text-white/60 uppercase">Montant à retirer</span>
                 <span className="text-xl font-black text-[#D4AF37]">
-                  {Math.round((stats.views / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000)).toLocaleString()} FCFA
+                  {Math.round((stats.premiumViews / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000)).toLocaleString()} FCFA
                 </span>
              </div>
 

@@ -27,7 +27,12 @@ export const AudioProvider = ({ children }) => {
 
   const registerView = async (trackId) => {
     try {
-      await supabase.rpc('increment_view_count', { project_id: trackId });
+      const isPremiumUser = currentUser?.is_premium || false;
+      await supabase.rpc('increment_view_count', {
+        project_id: trackId,
+        is_premium_user: isPremiumUser,
+        viewer_id: currentUser?.id || null
+      });
     } catch (err) {
       console.error("View count error:", err);
     }
@@ -165,13 +170,21 @@ export const AudioProvider = ({ children }) => {
     setProgress(time);
   };
 
+  const stopTrack = () => {
+    audioRef.current.pause();
+    audioRef.current.src = "";
+    setCurrentTrack(null);
+    setIsPlaying(false);
+    setProgress(0);
+  };
+
   return (
     <AudioContext.Provider value={{
       currentTrack, isPlaying, progress, duration,
       loopMode, isShuffle, offlineTracks,
       setLoopMode, setIsShuffle,
       playTrack, togglePlay, handleNext, handlePrev, seek,
-      downloadForOffline, removeOffline
+      downloadForOffline, removeOffline, stopTrack
     }}>
       {children}
     </AudioContext.Provider>

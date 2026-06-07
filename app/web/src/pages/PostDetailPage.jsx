@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Repeat2, Share2, Facebook, Twitter, Trash2, Award, ChevronLeft } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share2, Facebook, Twitter, Trash2, Award, ChevronLeft, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -113,6 +113,15 @@ const PostDetailPage = () => {
           .single();
 
         if (error) throw error;
+
+        // Increment view count via RPC for logging
+        await supabase.rpc('increment_post_view_count', {
+          post_id: id,
+          viewer_id: currentUser?.id || null
+        });
+
+        data.view_count = (data.view_count || 0) + 1;
+
         setPost(data);
         setLikesCount(data.likes_count || 0);
         setRepostsCount(data.reposts_count || 0);
@@ -358,6 +367,10 @@ const PostDetailPage = () => {
                     <div className="flex items-center gap-1.5 text-white/60">
                       <MessageCircle className="w-6 h-6" />
                       <span className="text-sm font-bold">{comments.length}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-white/60">
+                      <Eye className="w-6 h-6" />
+                      <span className="text-sm font-bold">{post?.view_count || 0}</span>
                     </div>
                     <button
                       onClick={handleRepost}

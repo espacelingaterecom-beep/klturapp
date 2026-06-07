@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Music, Video, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
+import { Music, Video, Image as ImageIcon, CheckCircle2, File as FileIcon, Archive } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Button } from '@/components/ui/button';
@@ -34,26 +34,29 @@ const UploadPage = () => {
   const [files, setFiles] = useState({
     coverArt: null,
     audioFile: null,
-    videoFile: null
+    videoFile: null,
+    otherFile: null
   });
 
   const [mentionSuggestions, setMentionSuggestions] = useState([]);
   const [hashtagSuggestions, setHashtagSuggestions] = useState([]);
   const [mentionIndex, setMentionIndex] = useState(-1);
+  const [activeMentionField, setActiveMentionField] = useState(null); // 'description' or 'collaborators'
 
   const handleInputChange = async (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
 
-    if (name === 'description') {
+    if (name === 'description' || name === 'collaborators') {
       const cursorPosition = e.target.selectionStart;
       const textBeforeCursor = value.substring(0, cursorPosition);
-      const words = textBeforeCursor.split(/\s/);
+      const words = textBeforeCursor.split(/[\s,]/);
       const lastWord = words[words.length - 1];
 
       if (lastWord.startsWith('@') && lastWord.length > 1) {
         const query = lastWord.substring(1);
         setMentionIndex(cursorPosition - lastWord.length);
+        setActiveMentionField(name);
 
         const { data } = await supabase
           .from('profiles')
@@ -63,9 +66,10 @@ const UploadPage = () => {
 
         setMentionSuggestions(data || []);
         setHashtagSuggestions([]);
-      } else if (lastWord.startsWith('#') && lastWord.length > 1) {
+      } else if (name === 'description' && lastWord.startsWith('#') && lastWord.length > 1) {
         const query = lastWord.substring(1);
         setMentionIndex(cursorPosition - lastWord.length);
+        setActiveMentionField(name);
 
         const tags = ['RCA', 'HipHop', 'Bangui', 'KlturRap', 'Nouveauté', 'Clip', 'RapCentrafricain']
           .filter(t => t.toLowerCase().startsWith(query.toLowerCase()))
@@ -76,18 +80,22 @@ const UploadPage = () => {
       } else {
         setMentionSuggestions([]);
         setHashtagSuggestions([]);
+        setActiveMentionField(null);
       }
     }
   };
 
   const selectMention = (username) => {
-    const before = formData.description.substring(0, mentionIndex);
-    const after = formData.description.substring(formData.description.indexOf(' ', mentionIndex) === -1 ? formData.description.length : formData.description.indexOf(' ', mentionIndex));
+    const field = activeMentionField || 'description';
+    const before = formData[field].substring(0, mentionIndex);
+    const after = formData[field].substring(formData[field].indexOf(' ', mentionIndex) === -1 && formData[field].indexOf(',', mentionIndex) === -1 ? formData[field].length : Math.max(formData[field].indexOf(' ', mentionIndex), formData[field].indexOf(',', mentionIndex)));
+
     setFormData(prev => ({
       ...prev,
-      description: `${before}@${username} ${after.trim()}`
+      [field]: `${before}@${username}${field === 'collaborators' ? ', ' : ' '}${after.trim()}`
     }));
     setMentionSuggestions([]);
+    setActiveMentionField(null);
   };
 
   const selectHashtag = (tag) => {
@@ -98,6 +106,7 @@ const UploadPage = () => {
       description: `${before}#${tag} ${after.trim()}`
     }));
     setHashtagSuggestions([]);
+    setActiveMentionField(null);
   };
 
   const handleFileChange = (e) => {
@@ -117,8 +126,14 @@ const UploadPage = () => {
       return;
     }
 
-    if (formData.type !== 'Music Video' && !files.audioFile) {
+    const isAudioType = ['Song', 'EP', 'Album', 'Mixtape'].includes(formData.type);
+    if (isAudioType && !files.audioFile) {
       toast.error('Veuillez fournir un fichier audio');
+      return;
+    }
+
+    if (formData.type === 'Other' && !files.otherFile) {
+      toast.error('Veuillez fournir votre fichier');
       return;
     }
 
@@ -144,18 +159,22 @@ const UploadPage = () => {
         coverArtPath = uploadData.path;
       }
 
-      // Upload Audio/Video
-      const mediaFile = formData.type === 'Music Video' ? files.videoFile : files.audioFile;
+      // Upload Media/File
+      let mediaFile = null;
+      if (formData.type === 'Music Video') mediaFile = files.videoFile;
+      else if (isAudioType) mediaFile = files.audioFile;
+      else mediaFile = files.otherFile;
+
       if (mediaFile) {
         const ext = mediaFile.name.split('.').pop();
-        const fileName = `${currentUser.id}/${Date.now()}_media.${ext}`;
+        const fileName = `${currentUser.id}/${Date.now()}_file.${ext}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('uploads')
           .upload(fileName, mediaFile);
 
         if (uploadError) {
-          console.error("Storage Media Error:", uploadError);
-          throw new Error(`Fichier Média: ${uploadError.message}`);
+          console.error("Storage Upload Error:", uploadError);
+          throw new Error(`Fichier: ${uploadError.message}`);
         }
         filePath = uploadData.path;
       }
@@ -247,6 +266,7 @@ const UploadPage = () => {
                           <SelectItem value="Album">Album</SelectItem>
                           <SelectItem value="Mixtape">Mixtape</SelectItem>
                           <SelectItem value="Music Video">Clip Vidéo</SelectItem>
+                          <SelectItem value="Other">Autre (PDF, ZIP, Document...)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -270,9 +290,27 @@ const UploadPage = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative">
                     <Label className="text-white font-bold">Artistes en featuring (optionnel)</Label>
-                    <Input name="collaborators" value={formData.collaborators} onChange={handleInputChange} className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37]" placeholder="Noms séparés par des virgules" />
+                    <Input name="collaborators" value={formData.collaborators} onChange={handleInputChange} className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37]" placeholder="Noms précédés de @ séparés par des virgules" />
+
+                    {mentionSuggestions.length > 0 && activeMentionField === 'collaborators' && (
+                      <div className="absolute top-full left-0 w-64 bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mt-2 overflow-hidden">
+                        {mentionSuggestions.map(user => (
+                          <button
+                            key={user.id}
+                            type="button"
+                            onClick={() => selectMention(user.username)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left"
+                          >
+                            <Avatar className="h-6 w-6 border border-white/10">
+                              <AvatarFallback className="text-[10px]">{user.username[0]}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-bold text-sm">@{user.username}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2 relative">
@@ -289,7 +327,7 @@ const UploadPage = () => {
                       {formatRichText(formData.description)}
                     </div>
 
-                    {mentionSuggestions.length > 0 && (
+                    {mentionSuggestions.length > 0 && activeMentionField === 'description' && (
                       <div className="absolute bottom-full left-0 w-64 bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
                         {mentionSuggestions.map(user => (
                           <button
@@ -359,7 +397,7 @@ const UploadPage = () => {
                           </label>
                         </div>
                       </div>
-                    ) : (
+                    ) : ['Song', 'EP', 'Album', 'Mixtape'].includes(formData.type) ? (
                       <div className="space-y-3">
                         <Label className="text-white font-bold flex items-center gap-2"><Music className="w-4 h-4"/> Fichier Audio <span className="text-[#D4AF37]">*</span></Label>
                         <div className="border-2 border-dashed border-[#333] rounded-xl p-6 text-center hover:border-[#D4AF37]/50 transition-colors bg-[#111]">
@@ -371,6 +409,21 @@ const UploadPage = () => {
                               <Music className="w-10 h-10 text-white/20 mb-2" />
                             )}
                             <span className="text-sm font-medium text-white/80">{files.audioFile ? files.audioFile.name : 'Choisir un audio (MP3/WAV, Max 100MB)'}</span>
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <Label className="text-white font-bold flex items-center gap-2"><FileIcon className="w-4 h-4"/> Votre Fichier <span className="text-[#D4AF37]">*</span></Label>
+                        <div className="border-2 border-dashed border-[#333] rounded-xl p-6 text-center hover:border-[#D4AF37]/50 transition-colors bg-[#111]">
+                          <input type="file" name="otherFile" id="otherFile" className="hidden" onChange={handleFileChange} />
+                          <label htmlFor="otherFile" className="cursor-pointer flex flex-col items-center">
+                            {files.otherFile ? (
+                              <CheckCircle2 className="w-10 h-10 text-[#D4AF37] mb-2" />
+                            ) : (
+                              <Archive className="w-10 h-10 text-white/20 mb-2" />
+                            )}
+                            <span className="text-sm font-medium text-white/80">{files.otherFile ? files.otherFile.name : 'Choisir un fichier (Tout format, Max 100MB)'}</span>
                           </label>
                         </div>
                       </div>

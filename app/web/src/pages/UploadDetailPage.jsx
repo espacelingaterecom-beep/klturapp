@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit, CheckCircle, WifiOff } from 'lucide-react';
+import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit, CheckCircle, CheckCircle2, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -45,6 +45,10 @@ const UploadDetailPage = () => {
   const [postingComment, setPostingComment] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [expandedComments, setExpandedComments] = useState({});
+
+  const [hasVoted, setHasVoted] = useState(false);
+  const [isVoting, setIsVoting] = useState(false);
+  const [voteCount, setVoteCount] = useState(0);
 
   const [mentionSuggestions, setMentionSuggestions] = useState([]);
   const [hashtagSuggestions, setHashtagSuggestions] = useState([]);
@@ -157,6 +161,14 @@ const UploadDetailPage = () => {
           reposts: repRes.count || 0
         });
 
+        // Fetch Track Votes
+        const { count: votesCount } = await supabase
+          .from('track_votes')
+          .select('*', { count: 'exact', head: true })
+          .eq('upload_id', id);
+
+        setVoteCount(votesCount || 0);
+
         const mappedComments = (commentsRes.data || []).map(c => ({
           ...c,
           expand: {
@@ -177,6 +189,16 @@ const UploadDetailPage = () => {
             favorited: !!myFav.data, favId: myFav.data?.id,
             reposted: !!myRep.data, repId: myRep.data?.id
           });
+
+          // Check if user already voted for this track
+          const { data: myVote } = await supabase
+            .from('track_votes')
+            .select('id')
+            .eq('upload_id', id)
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+
+          setHasVoted(!!myVote);
         }
 
         // Related
@@ -366,6 +388,39 @@ const UploadDetailPage = () => {
     }
   };
 
+  const handleVote = async () => {
+    if (!isAuthenticated) return setShowLoginPrompt(true);
+    if (hasVoted) {
+      toast.info("Vous avez déjà voté pour ce morceau cette semaine !");
+      return;
+    }
+
+    setIsVoting(true);
+    try {
+      const { error } = await supabase
+        .from('track_votes')
+        .insert([{ upload_id: id, user_id: currentUser.id }]);
+
+      if (error) {
+        if (error.code === '23505') {
+           toast.info("Déjà voté !");
+           setHasVoted(true);
+           return;
+        }
+        throw error;
+      }
+
+      setHasVoted(true);
+      setVoteCount(prev => prev + 1);
+      toast.success("Vote enregistré ! Merci pour votre soutien.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors du vote.");
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col">
@@ -423,39 +478,53 @@ const UploadDetailPage = () => {
                       <h1 className="text-3xl md:text-4xl font-black text-white mb-2">{upload.title}</h1>
                       <Link to={`/profil/${artist?.id}`} className="text-lg text-white/70 hover:text-[#D4AF37] font-medium block mb-6 transition-colors">{artist?.name || 'Artiste Inconnu'}</Link>
 
-                      {mediaUrl && (
-                        <Button
-                          onClick={() => playTrack({
-                            id: upload.id,
-                            title: upload.title,
-                            artist: artist?.name || 'Artiste Inconnu',
-                            url: mediaUrl,
-                            cover: getFileUrl('covers', upload.cover_art)
-                          }, [
-                            {
+                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-8">
+                        {mediaUrl && (
+                          <Button
+                            onClick={() => playTrack({
                               id: upload.id,
                               title: upload.title,
                               artist: artist?.name || 'Artiste Inconnu',
                               url: mediaUrl,
                               cover: getFileUrl('covers', upload.cover_art)
-                            },
-                            ...related.map(r => ({
-                              id: r.id,
-                              title: r.title,
-                              artist: artist?.name || 'Artiste Inconnu',
-                              url: getFileUrl('uploads', r.file_path),
-                              cover: getFileUrl('covers', r.cover_art)
-                            }))
-                          ])}
-                          className="w-full md:w-auto h-14 px-10 bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black text-lg uppercase tracking-wider rounded-full gold-glow"
+                            }, [
+                              {
+                                id: upload.id,
+                                title: upload.title,
+                                artist: artist?.name || 'Artiste Inconnu',
+                                url: mediaUrl,
+                                cover: getFileUrl('covers', upload.cover_art)
+                              },
+                              ...related.map(r => ({
+                                id: r.id,
+                                title: r.title,
+                                artist: artist?.name || 'Artiste Inconnu',
+                                url: getFileUrl('uploads', r.file_path),
+                                cover: getFileUrl('covers', r.cover_art)
+                              }))
+                            ])}
+                            className="w-full md:w-auto h-14 px-10 bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black text-lg uppercase tracking-wider rounded-full gold-glow"
+                          >
+                            {currentTrack?.id === upload.id && isPlaying ? (
+                              <><Pause className="w-6 h-6 mr-2 fill-current" /> Pause</>
+                            ) : (
+                              <><Play className="w-6 h-6 mr-2 fill-current" /> Écouter</>
+                            )}
+                          </Button>
+                        )}
+
+                        <Button
+                          onClick={handleVote}
+                          disabled={isVoting || hasVoted}
+                          className={`w-full md:w-auto h-14 px-8 border-2 font-black text-lg uppercase tracking-wider rounded-full transition-all ${
+                            hasVoted
+                            ? 'bg-green-600/20 border-green-600 text-green-500 cursor-default'
+                            : 'bg-transparent border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black'
+                          }`}
                         >
-                          {currentTrack?.id === upload.id && isPlaying ? (
-                            <><Pause className="w-6 h-6 mr-2 fill-current" /> Pause</>
-                          ) : (
-                            <><Play className="w-6 h-6 mr-2 fill-current" /> Écouter maintenant</>
-                          )}
+                          {isVoting ? 'Vote...' : hasVoted ? <><CheckCircle2 className="w-6 h-6 mr-2" /> Voté</> : <><Award className="w-6 h-6 mr-2" /> Voter pour le Top</>}
                         </Button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 )}

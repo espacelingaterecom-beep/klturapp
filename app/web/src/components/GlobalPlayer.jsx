@@ -11,7 +11,7 @@ const GlobalPlayer = () => {
     currentTrack, isPlaying, progress, duration,
     loopMode, isShuffle,
     setLoopMode, setIsShuffle,
-    togglePlay, handleNext, handlePrev, seek
+    togglePlay, handleNext, handlePrev, seek, stopTrack
   } = useAudio();
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -55,7 +55,16 @@ const GlobalPlayer = () => {
             />
           </div>
 
-          <div className="p-4">
+          <div className="p-4 relative">
+            {/* Close Button */}
+            <button
+              onClick={stopTrack}
+              className="absolute top-2 right-2 text-white/20 hover:text-red-500 transition-colors z-20"
+              title="Fermer le lecteur"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
             <div className="flex items-center gap-4">
               {/* Cover Art */}
               <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#111] shrink-0 border border-[#222]">
