@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Award, Zap, BarChart3, Headphones, Star } from 'lucide-react';
+import { CheckCircle2, Award, Zap, BarChart3, Headphones, Star, Music, Users, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext.jsx';
+import { supabase } from '@/lib/supabaseClient.js';
 import apiServerClient from '@/lib/apiServerClient.js';
 import { Link } from 'react-router-dom';
 
@@ -14,7 +15,7 @@ const PremiumPage = () => {
   const { currentUser, isPremium, isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const handlePayment = async () => {
+  const handlePayment = async (type, amount) => {
     if (!isAuthenticated) {
       toast.error('Connectez-vous pour devenir premium');
       return;
@@ -22,19 +23,27 @@ const PremiumPage = () => {
     
     setLoading(true);
     try {
-      const data = await apiServerClient('/orange-money/initiate-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, amount: 5000 })
-      });
+      // 1. Create a manual request in Supabase
+      const { error } = await supabase
+        .from('subscription_requests')
+        .insert([{
+          user_id: currentUser.id,
+          type,
+          amount,
+          status: 'pending'
+        }]);
 
-      if (data.paymentUrl) {
-        window.open(data.paymentUrl, '_blank');
-        toast.info('Redirection vers Orange Money. Une fois payé, votre compte sera automatiquement mis à jour.');
-      }
+      if (error) throw error;
+
+      toast.success('Demande envoyée ! Veuillez procéder au paiement.');
+
+      // 2. Open WhatsApp for confirmation with details
+      const message = encodeURIComponent(`Bonjour KLTUR RAP, je souhaite activer mon compte ${type === 'artist' ? 'Artiste Certifié' : 'Auditeur Premium'}. Mon ID: ${currentUser.id}`);
+      window.open(`https://wa.me/qr/RXPRJWAHFIXRP1?text=${message}`, '_blank');
+
     } catch (err) {
       console.error(err);
-      toast.error(err.message || 'Erreur lors de l\'initialisation du paiement');
+      toast.error('Erreur lors de l\'envoi de la demande. Veuillez réessayer.');
     } finally {
       setLoading(false);
     }
@@ -57,113 +66,129 @@ const PremiumPage = () => {
         <Header />
 
         <main className="flex-grow py-20 px-4 sm:px-6 lg:px-8 overflow-hidden relative">
-          {/* Background Glows */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#D4AF37]/10 via-transparent to-transparent pointer-events-none" />
 
           <div className="max-w-7xl mx-auto relative z-10">
             
-            {isPremium ? (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                className="max-w-2xl mx-auto bg-[#0a0a0a] rounded-2xl border border-[#D4AF37] p-12 text-center shadow-[0_0_50px_rgba(212,175,55,0.1)]"
-              >
-                <Award className="w-24 h-24 text-[#D4AF37] mx-auto mb-6 drop-shadow-[0_0_15px_rgba(212,175,55,0.5)]" />
-                <h1 className="text-4xl font-black text-white uppercase mb-4">Vous êtes <span className="text-[#D4AF37]">Premium</span></h1>
-                <p className="text-white/70 text-lg mb-8">Merci de faire partie de l'élite de KLTUR RAP. Profitez de tous vos avantages exclusifs sur la plateforme.</p>
-                <Button asChild className="h-14 px-8 bg-[#D4AF37] text-black hover:bg-[#b5952f] font-bold text-lg">
-                  <Link to="/dashboard">Accéder au Dashboard</Link>
-                </Button>
+            <div className="text-center max-w-3xl mx-auto mb-16">
+               <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-5xl md:text-6xl font-black text-white uppercase tracking-tight mb-6">
+                 Passez au <span className="text-[#D4AF37] gold-glow-text">NIVEAU SUPÉRIEUR</span>
+               </motion.h1>
+               <p className="text-xl text-white/70">
+                 Que vous soyez un fan inconditionnel ou un artiste en pleine ascension, KLTUR RAP vous offre les meilleurs outils.
+               </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch max-w-6xl mx-auto">
+
+              {/* AUDITEUR PREMIUM */}
+              <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} className="flex">
+                <div className="bg-[#0a0a0a] rounded-3xl border border-white/10 p-8 md:p-12 flex flex-col w-full hover:border-[#D4AF37]/50 transition-all duration-500 relative">
+                  <div className="mb-8">
+                    <div className="w-14 h-14 bg-[#D4AF37]/10 rounded-2xl flex items-center justify-center mb-6 border border-[#D4AF37]/20">
+                       <Users className="w-8 h-8 text-[#D4AF37]" />
+                    </div>
+                    <h2 className="text-3xl font-black text-white uppercase mb-2">Auditeur Premium</h2>
+                    <p className="text-white/50 font-medium">Pour les vrais passionnés de culture</p>
+                    <div className="mt-6 flex items-end gap-2">
+                      <span className="text-5xl font-black text-[#D4AF37]">3000</span>
+                      <span className="text-xl text-white/50 font-bold mb-1">FCFA / mois</span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-4 mb-10 flex-grow">
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                      Écoute illimitée et haute qualité
+                    </li>
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                      Aucune publicité (Radio & Plateforme)
+                    </li>
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                      Soutien direct : 50% reversé aux artistes
+                    </li>
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                      Téléchargement mode hors-ligne
+                    </li>
+                  </ul>
+
+                  <Button
+                    onClick={() => handlePayment('auditor', 3000)}
+                    disabled={loading}
+                    className="w-full h-16 bg-white text-black hover:bg-[#D4AF37] transition-all font-black text-lg uppercase tracking-wider"
+                  >
+                    {loading ? 'Redirection...' : 'S\'abonner (3000 CFA)'}
+                  </Button>
+                </div>
               </motion.div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
-                  <h1 className="text-5xl md:text-6xl font-black text-white uppercase tracking-tight mb-6 leading-none">
-                    Certifiez votre compte <span className="text-[#D4AF37] gold-glow-text">KLTUR RAP</span>
-                  </h1>
-                  <p className="text-xl text-white/70 mb-10 leading-relaxed">
-                    Passez au niveau supérieur. Le programme Premium donne aux artistes indépendants les outils pour briller et monétiser leur passion.
-                  </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
-                    {benefits.map((b, i) => (
-                      <div key={i} className="flex gap-4">
-                        <div className="mt-1 bg-[#111] p-3 rounded-xl border border-[#333] shrink-0 h-fit">{b.icon}</div>
-                        <div>
-                          <h3 className="font-bold text-white mb-1">{b.title}</h3>
-                          <p className="text-sm text-white/50 leading-relaxed">{b.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              {/* ARTISTE CERTIFIÉ */}
+              <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="flex">
+                <div className="bg-[#0a0a0a] rounded-3xl border-2 border-[#D4AF37] p-8 md:p-12 flex flex-col w-full gold-glow relative">
+                  <div className="absolute top-0 right-0 bg-[#D4AF37] text-black text-xs font-black uppercase tracking-wider py-1.5 px-6 rounded-bl-2xl">Recommandé</div>
 
-                  {/* Testimonial */}
-                  <div className="bg-[#111] border-l-4 border-[#D4AF37] p-6 rounded-r-xl relative">
-                    <Star className="absolute top-4 right-4 w-12 h-12 text-[#D4AF37]/10" />
-                    <p className="text-white/80 italic font-medium mb-4 relative z-10">"Depuis que j'ai pris le compte Premium, mes projets remontent en haut de la galerie et mes vues ont triplé. C'est un indispensable pour la visibilité."</p>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-[#222] flex items-center justify-center font-bold text-[#D4AF37]">M</div>
-                      <div>
-                        <p className="text-sm font-bold text-white uppercase">Malko Trap</p>
-                        <p className="text-xs text-[#D4AF37] font-bold flex items-center gap-1"><Award className="w-3 h-3"/> Artiste Certifié</p>
-                      </div>
+                  <div className="mb-8">
+                    <div className="w-14 h-14 bg-[#D4AF37] rounded-2xl flex items-center justify-center mb-6">
+                       <Award className="w-8 h-8 text-black" />
+                    </div>
+                    <h2 className="text-3xl font-black text-white uppercase mb-2">Artiste Certifié</h2>
+                    <p className="text-white/50 font-medium">Pour booster votre carrière</p>
+                    <div className="mt-6 flex items-end gap-2">
+                      <span className="text-5xl font-black text-[#D4AF37]">5000</span>
+                      <span className="text-xl text-white/50 font-bold mb-1">FCFA / mois</span>
                     </div>
                   </div>
-                </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.2 }}>
-                  <div className="bg-[#0a0a0a] rounded-3xl border border-[#D4AF37]/30 p-8 md:p-12 relative overflow-hidden group hover:border-[#D4AF37] transition-all duration-500">
-                    <div className="absolute top-0 right-0 bg-[#D4AF37] text-black text-xs font-bold uppercase tracking-wider py-1.5 px-4 rounded-bl-xl z-20">Recommandé</div>
-                    
-                    <div className="relative z-10 text-center mb-8">
-                      <h2 className="text-3xl font-black text-white uppercase mb-2">Passe Premium</h2>
-                      <p className="text-white/50 font-medium">Abonnement mensuel</p>
-                      <div className="mt-6 flex items-end justify-center gap-2">
-                        <span className="text-5xl font-black text-[#D4AF37]">5000</span>
-                        <span className="text-xl text-white/50 font-bold mb-1">FCFA / mois</span>
-                      </div>
-                    </div>
+                  <ul className="space-y-4 mb-10 flex-grow">
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-[#D4AF37] shrink-0" />
+                      Badge de certification doré
+                    </li>
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-[#D4AF37] shrink-0" />
+                      Mise en avant prioritaire (Top Galerie)
+                    </li>
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-[#D4AF37] shrink-0" />
+                      Statistiques d'écoutes détaillées
+                    </li>
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-[#D4AF37] shrink-0" />
+                      Monétisation de vos écoutes premium
+                    </li>
+                    <li className="flex items-center gap-3 text-white/80 font-medium">
+                      <CheckCircle2 className="w-5 h-5 text-[#D4AF37] shrink-0" />
+                      Support direct équipe KLTUR
+                    </li>
+                  </ul>
 
-                    <ul className="space-y-4 mb-10">
-                      {['Badge doré sur votre profil', 'Mise en avant dans la galerie', 'Upload illimité de projets', 'Statistiques détaillées', 'Support direct sur WhatsApp'].map((feat, i) => (
-                        <li key={i} className="flex items-center gap-3 text-white/80 font-medium">
-                          <CheckCircle2 className="w-5 h-5 text-[#D4AF37] shrink-0" />
-                          {feat}
-                        </li>
-                      ))}
-                    </ul>
+                  <Button
+                    onClick={() => handlePayment('artist', 5000)}
+                    disabled={loading}
+                    className="w-full h-16 bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all font-black text-lg uppercase tracking-wider"
+                  >
+                    {loading ? 'Redirection...' : 'Certifier mon compte'}
+                  </Button>
+                </div>
+              </motion.div>
 
-                    <Button 
-                      onClick={handlePayment} 
-                      disabled={loading}
-                      className="w-full h-16 bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all font-black text-lg uppercase tracking-wider relative overflow-hidden"
-                    >
-                      {loading ? 'Redirection...' : 'Payer avec Orange Money'}
-                    </Button>
+            </div>
 
-                    <div className="flex items-center gap-4 my-6">
-                      <div className="h-px bg-white/10 flex-grow" />
-                      <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">OU</span>
-                      <div className="h-px bg-white/10 flex-grow" />
-                    </div>
-
-                    <a
-                      href="https://wa.me/qr/RXPRJWAHFIXRP1"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full h-14 bg-green-600 hover:bg-green-700 text-white transition-all font-bold text-sm uppercase tracking-wider rounded-xl flex items-center justify-center gap-3"
-                    >
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" className="w-5 h-5 invert brightness-0" alt="" />
-                      S'abonner via WhatsApp
-                    </a>
-
-                    <p className="text-center text-[10px] text-white/30 mt-6 leading-relaxed italic">
-                      Choisissez Orange Money pour une activation automatique, <br />
-                      ou WhatsApp pour un paiement assisté.
-                    </p>
-                  </div>
-                </motion.div>
-              </div>
-            )}
+            <div className="mt-20 text-center">
+               <p className="text-white/30 text-sm italic mb-8">Besoin d'aide ou d'un autre mode de paiement ?</p>
+               <a
+                  href="https://wa.me/qr/RXPRJWAHFIXRP1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 px-8 h-14 bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/20 rounded-2xl font-bold hover:bg-[#25D366]/20 transition-all"
+                >
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" className="w-5 h-5" alt="" />
+                  Contacter le support WhatsApp
+                </a>
+            </div>
 
           </div>
         </main>

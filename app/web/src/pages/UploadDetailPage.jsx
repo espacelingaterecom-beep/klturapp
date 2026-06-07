@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit, CheckCircle, CheckCircle2, WifiOff } from 'lucide-react';
+import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit, CheckCircle, CheckCircle2, WifiOff, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -436,6 +436,16 @@ const UploadDetailPage = () => {
   const mediaUrl = isVideo ? getFileUrl('uploads', upload.file_path) : getFileUrl('uploads', upload.file_path);
   const isOwner = currentUser?.id === artist?.id;
 
+  const getBadge = (user) => {
+    if (user?.subscription_type === 'artist' || user?.is_premium && !user?.subscription_type) {
+      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" />;
+    }
+    if (user?.subscription_type === 'auditor') {
+      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />;
+    }
+    return null;
+  };
+
   return (
     <>
       <Helmet>
@@ -705,7 +715,7 @@ const UploadDetailPage = () => {
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-bold text-white text-sm flex items-center gap-1">
                               {c.expand?.userId?.username || c.expand?.userId?.name}
-                              {c.expand?.userId?.is_premium && <Award className="w-3 h-3 text-[#D4AF37]" />}
+                              {getBadge(c.expand?.userId)}
                             </span>
                             <span className="text-xs text-white/40">{new Date(c.created_at).toLocaleDateString('fr-FR')}</span>
                             {currentUser?.id === c.user_id && (
@@ -745,7 +755,7 @@ const UploadDetailPage = () => {
                 </Avatar>
                 <div className="flex items-center justify-center gap-2 mb-1">
                   <h3 className="text-xl font-bold text-white">{artist?.username || artist?.name || 'Artiste Inconnu'}</h3>
-                  {artist?.is_premium && <Award className="w-5 h-5 text-[#D4AF37]" title="Certifié" />}
+                  {getBadge(artist)}
                 </div>
                 <p className="text-white/50 text-sm mb-6">{artist?.user_role || 'Artiste'}</p>
                 <Button asChild className="w-full bg-white text-black hover:bg-white/90 font-bold">

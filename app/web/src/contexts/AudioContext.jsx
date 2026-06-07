@@ -2,10 +2,12 @@ import React, { createContext, useContext, useState, useRef, useEffect } from 'r
 import { supabase } from '@/lib/supabaseClient.js';
 import { OfflineManager } from '@/lib/offlineManager.js';
 import { Capacitor } from '@capacitor/core';
+import { useAuth } from './AuthContext.jsx';
 
 const AudioContext = createContext();
 
 export const AudioProvider = ({ children }) => {
+  const { currentUser } = useAuth();
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playlist, setPlaylist] = useState([]);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield, WifiOff, LayoutDashboard, Plus } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield, WifiOff, LayoutDashboard, Plus, ShieldCheck } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -103,6 +103,16 @@ const Header = () => {
     setSearchTerm('');
   };
 
+  const getBadge = (user) => {
+    if (user?.subscription_type === 'artist' || user?.is_premium && !user?.subscription_type) {
+      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" />;
+    }
+    if (user?.subscription_type === 'auditor') {
+      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />;
+    }
+    return null;
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-[#222]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -149,7 +159,10 @@ const Header = () => {
                             <Avatar className="h-8 w-8">
                               <AvatarFallback className="bg-[#222] text-[#D4AF37] text-xs font-bold">{artist.username?.charAt(0) || 'A'}</AvatarFallback>
                             </Avatar>
-                            <span className="text-sm font-bold text-white group-hover:text-[#D4AF37]">{artist.username || artist.name}</span>
+                            <span className="text-sm font-bold text-white group-hover:text-[#D4AF37] flex items-center gap-1.5">
+                              {artist.username || artist.name}
+                              {getBadge(artist)}
+                            </span>
                           </Link>
                         ))}
                       </div>

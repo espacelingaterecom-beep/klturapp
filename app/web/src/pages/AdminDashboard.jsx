@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, BarChart3, Newspaper, Radio, Trophy, Settings, TrendingUp, DollarSign, FileSpreadsheet, FileText, DownloadCloud, Wallet } from 'lucide-react';
+import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, BarChart3, Newspaper, Radio, Trophy, Settings, TrendingUp, DollarSign, FileSpreadsheet, FileText, DownloadCloud, Wallet, ShieldCheck, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import Header from '@/components/Header.jsx';
@@ -33,6 +33,7 @@ const AdminDashboard = () => {
   const [news, setNews] = useState([]);
   const [radioEpisodes, setRadioEpisodes] = useState([]);
   const [payoutRequests, setPayoutRequests] = useState([]);
+  const [subscriptionRequests, setSubscriptionRequests] = useState([]);
   const [analytics, setAnalytics] = useState({
     totalViews: 0,
     totalDownloads: 0,
@@ -170,6 +171,13 @@ const AdminDashboard = () => {
         .select('*, profiles:user_id(username, email, avatar)')
         .order('created_at', { ascending: false });
       if (!pErr) setPayoutRequests(payouts || []);
+
+      // 7. Fetch Subscription Requests
+      const { data: subs, error: sErr } = await supabase
+        .from('subscription_requests')
+        .select('*, profiles:user_id(username, email, avatar)')
+        .order('created_at', { ascending: false });
+      if (!sErr) setSubscriptionRequests(subs || []);
 
       const combined = [
         ...(ups || []).map(u => ({ ...u, contentType: 'Upload' })),
@@ -498,6 +506,43 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleUpdateSubscriptionStatus = async (request, newStatus) => {
+    const loadingToast = toast.loading(`Mise à jour de l'abonnement...`);
+
+    try {
+      // 1. Update request status
+      const { error: reqError } = await supabase
+        .from('subscription_requests')
+        .update({ status: newStatus })
+        .eq('id', request.id);
+
+      if (reqError) throw reqError;
+
+      // 2. If approved, update user profile
+      if (newStatus === 'approved') {
+        const expiryDate = new Date();
+        expiryDate.setMonth(expiryDate.getMonth() + 1);
+
+        const { error: profError } = await supabase
+          .from('profiles')
+          .update({
+            is_premium: true,
+            subscription_type: request.type,
+            premium_until: expiryDate.toISOString()
+          })
+          .eq('id', request.user_id);
+
+        if (profError) throw profError;
+      }
+
+      toast.success(`Abonnement ${newStatus === 'approved' ? 'activé' : 'rejeté'} !`, { id: loadingToast });
+      loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la mise à jour", { id: loadingToast });
+    }
+  };
+
   const exportToCSV = (data, filename) => {
     if (!data || data.length === 0) {
       toast.error("Aucune donnée à exporter");
@@ -619,6 +664,9 @@ const AdminDashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="payouts" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
               <Wallet className="w-4 h-4 mr-2" /> Retraits
+            </TabsTrigger>
+            <TabsTrigger value="subscriptions" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <ShieldCheck className="w-4 h-4 mr-2" /> Abonnements
             </TabsTrigger>
             <TabsTrigger value="team" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
               <Shield className="w-4 h-4 mr-2" /> Équipe
@@ -1011,6 +1059,11 @@ const AdminDashboard = () => {
                         </td>
                         <td className="px-8 py-5">
                           <span className="text-[10px] font-black uppercase text-[#D4AF37] border border-[#D4AF37]/30 px-2 py-1 rounded bg-[#D4AF37]/5">{u.user_role || 'Membre'}</span>
+                          {u.premium_until && (
+                            <p className="text-[9px] text-white/30 mt-1 font-bold">
+                              Expire le : {new Date(u.premium_until).toLocaleDateString()}
+                            </p>
+                          )}
                           {u.phone && <p className="text-[10px] text-white/40 mt-1.5 font-bold uppercase">{u.phone}</p>}
                         </td>
                         <td className="px-8 py-5 text-sm text-white/60 font-medium">
@@ -1301,6 +1354,86 @@ const AdminDashboard = () => {
                                           Annuler
                                         </Button>
                                      </div>
+                                  )}
+                               </td>
+                            </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+          </TabsContent>
+
+          {/* SUBSCRIPTIONS TAB */}
+          <TabsContent value="subscriptions" className="outline-none">
+             <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] overflow-hidden">
+                <div className="p-8 border-b border-[#222]">
+                   <h3 className="text-xl font-bold text-white uppercase tracking-tight">Demandes d'Abonnement</h3>
+                   <p className="text-sm text-white/40">Validez les paiements reçus via Orange Money ou WhatsApp.</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                   <table className="w-full text-left">
+                      <thead className="bg-[#111] text-[10px] font-black uppercase tracking-widest text-white/40 border-b border-[#222]">
+                         <tr>
+                            <th className="px-8 py-6">Utilisateur</th>
+                            <th className="px-8 py-6">Offre</th>
+                            <th className="px-8 py-6">Montant</th>
+                            <th className="px-8 py-6">Date</th>
+                            <th className="px-8 py-6 text-right">Action</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#222]">
+                         {subscriptionRequests.length === 0 ? (
+                            <tr>
+                               <td colSpan="5" className="px-8 py-20 text-center text-white/20 italic">Aucune demande en attente.</td>
+                            </tr>
+                         ) : subscriptionRequests.map(s => (
+                            <tr key={s.id} className="hover:bg-white/5 transition-colors group">
+                               <td className="px-8 py-5">
+                                  <div className="flex items-center gap-4">
+                                     <Avatar className="h-10 w-10 border border-[#222]">
+                                        <AvatarImage src={getPublicImageUrl('avatars', s.profiles?.avatar)} />
+                                        <AvatarFallback className="bg-black text-[#D4AF37] font-black">{s.profiles?.username?.charAt(0)}</AvatarFallback>
+                                     </Avatar>
+                                     <div className="min-w-0">
+                                        <p className="font-bold text-white truncate">@{s.profiles?.username}</p>
+                                        <p className="text-[10px] text-white/40 truncate">{s.profiles?.email}</p>
+                                     </div>
+                                  </div>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <span className={`text-[10px] font-black uppercase px-2 py-1 rounded ${s.type === 'artist' ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'bg-blue-500/10 text-blue-400'}`}>
+                                     {s.type === 'artist' ? 'Artiste Certifié' : 'Auditeur Premium'}
+                                  </span>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <span className="font-black text-white">{s.amount.toLocaleString()} FCFA</span>
+                               </td>
+                               <td className="px-8 py-5 text-sm text-white/40">
+                                  {new Date(s.created_at).toLocaleDateString()}
+                               </td>
+                               <td className="px-8 py-5 text-right">
+                                  {s.status === 'pending' ? (
+                                     <div className="flex justify-end gap-2">
+                                        <Button
+                                          onClick={() => handleUpdateSubscriptionStatus(s, 'approved')}
+                                          className="bg-green-600 hover:bg-green-700 text-white font-bold h-9 px-4 rounded-xl text-[10px] uppercase"
+                                        >
+                                          Approuver
+                                        </Button>
+                                        <Button
+                                          onClick={() => handleUpdateSubscriptionStatus(s, 'rejected')}
+                                          variant="ghost"
+                                          className="text-red-500 hover:bg-red-500/10 font-bold h-9 px-4 rounded-xl text-[10px] uppercase"
+                                        >
+                                          Rejeter
+                                        </Button>
+                                     </div>
+                                  ) : (
+                                     <span className={`text-[10px] font-black uppercase ${s.status === 'approved' ? 'text-green-500' : 'text-red-500'}`}>
+                                        {s.status === 'approved' ? 'Validé' : 'Refusé'}
+                                     </span>
                                   )}
                                </td>
                             </tr>

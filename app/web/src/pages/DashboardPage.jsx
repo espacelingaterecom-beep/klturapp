@@ -105,7 +105,7 @@ const DashboardPage = () => {
           supabase
             .from('profiles')
             .select('id', { count: 'exact', head: true })
-            .eq('is_premium', true),
+            .eq('subscription_type', 'auditor'),
           supabase
             .from('uploads')
             .select('premium_view_count'),
@@ -172,6 +172,7 @@ const DashboardPage = () => {
 
         // Calculate global platform stats for revenue
         const platformPremiumStreams = (totalStreamsResult.data || []).reduce((acc, curr) => acc + (curr.premium_view_count || 0), 0);
+        const premiumUsersCount = (premiumUsersResult.count || 0);
 
         setStats({
           total: uploadsResult.count || 0,
@@ -180,7 +181,7 @@ const DashboardPage = () => {
           followers: followersResult.count || 0,
           likes: totalLikes,
           downloads: totalDownloads,
-          totalPlatformPremiumUsers: premiumUsersResult.count || 0,
+          totalPlatformPremiumUsers: premiumUsersCount,
           totalPlatformPremiumStreams: platformPremiumStreams || 1 // Avoid division by zero
         });
 
@@ -751,7 +752,7 @@ const DashboardPage = () => {
                       <div className="bg-[#111] border border-[#222] px-6 py-4 rounded-2xl flex items-center gap-4">
                         <p className="text-[10px] font-black uppercase text-white/30 tracking-widest">Valeur d'une écoute</p>
                         <p className="text-xl font-black text-[#D4AF37]">
-                          {Math.round((stats.totalPlatformPremiumUsers * 5000 * 0.6) / stats.totalPlatformPremiumStreams)} <span className="text-xs uppercase">CFA</span>
+                          {Math.round((stats.totalPlatformPremiumUsers * 1500) / stats.totalPlatformPremiumStreams)} <span className="text-xs uppercase">CFA</span>
                         </p>
                       </div>
                     </div>
@@ -765,7 +766,7 @@ const DashboardPage = () => {
                                <p className="text-white/40 text-xs font-black uppercase tracking-[0.2em] mb-4">Total de vos revenus estimés</p>
                                <div className="flex items-baseline gap-4 mb-2">
                                   <h2 className="text-6xl font-black tracking-tighter text-[#D4AF37]">
-                                    {Math.round((stats.premiumViews / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000)).toLocaleString()}
+                                    {Math.round((stats.premiumViews / stats.totalPlatformPremiumStreams) * (stats.totalPlatformPremiumUsers * 1500)).toLocaleString()}
                                   </h2>
                                   <span className="text-2xl font-black uppercase tracking-widest text-white/20">FCFA</span>
                                </div>
@@ -787,7 +788,7 @@ const DashboardPage = () => {
                                   <p className="text-2xl font-black">{stats.premiumViews}</p>
                                </div>
                                <div className="bg-white/5 p-6 rounded-2xl border border-white/5">
-                                  <p className="text-[10px] font-black uppercase text-white/30 mb-2">Part Artiste (60%)</p>
+                                  <p className="text-[10px] font-black uppercase text-white/30 mb-2">Part Artiste (50%)</p>
                                   <p className="text-2xl font-black text-[#D4AF37]">Active</p>
                                </div>
                             </div>
@@ -805,8 +806,8 @@ const DashboardPage = () => {
                           </CardHeader>
                           <CardContent>
                              <p className="text-2xl font-black">{stats.totalPlatformPremiumUsers}</p>
-                             <p className="text-xs text-white/40 mt-1 uppercase font-bold">Abonnés sur KLTUR</p>
-                             <p className="mt-4 text-[10px] text-white/20 font-medium italic">Base de calcul : {stats.totalPlatformPremiumUsers.toLocaleString()} x 5000 CFA</p>
+                             <p className="text-xs text-white/40 mt-1 uppercase font-bold">Auditeurs Premium</p>
+                             <p className="mt-4 text-[10px] text-white/20 font-medium italic">Base de calcul : {stats.totalPlatformPremiumUsers.toLocaleString()} x 1500 CFA</p>
                           </CardContent>
                        </Card>
 
@@ -817,8 +818,8 @@ const DashboardPage = () => {
                              </CardTitle>
                           </CardHeader>
                           <CardContent>
-                             <p className="text-2xl font-black">{(stats.totalPlatformPremiumUsers * 5000 * 0.6).toLocaleString()}</p>
-                             <p className="text-xs text-white/40 mt-1 uppercase font-bold text-green-500">60% reversé aux artistes</p>
+                             <p className="text-2xl font-black">{(stats.totalPlatformPremiumUsers * 1500).toLocaleString()}</p>
+                             <p className="text-xs text-white/40 mt-1 uppercase font-bold text-green-500">50% reversé aux artistes</p>
                           </CardContent>
                        </Card>
 
@@ -841,8 +842,8 @@ const DashboardPage = () => {
                        <div>
                           <h4 className="font-black text-white uppercase tracking-wider mb-2">Comment sont calculés vos revenus ?</h4>
                           <p className="text-white/60 text-sm leading-relaxed max-w-3xl">
-                             Votre rémunération dépend du volume total d'abonnements premium sur la plateforme.
-                             Nous prélevons <strong>60% des revenus totaux</strong> que nous redistribuons équitablement entre tous les artistes.
+                             Votre rémunération dépend du volume total d'abonnements <strong>Auditeur Premium</strong> sur la plateforme.
+                             Nous prélevons <strong>50% (soit 1500 FCFA par abonné)</strong> que nous redistribuons équitablement entre tous les artistes.
                              Votre part est proportionnelle à vos écoutes par rapport au total des écoutes de la plateforme.
                              Plus vous êtes écouté, plus la valeur de votre part augmente !
                           </p>
@@ -914,7 +915,7 @@ const DashboardPage = () => {
              <div className="bg-[#111] p-4 rounded-xl border border-[#222] flex items-center justify-between">
                 <span className="text-sm font-bold text-white/60 uppercase">Montant à retirer</span>
                 <span className="text-xl font-black text-[#D4AF37]">
-                  {Math.round((stats.premiumViews / stats.totalPlatformPremiumStreams) * (0.6 * stats.totalPlatformPremiumUsers * 5000)).toLocaleString()} FCFA
+                  {Math.round((stats.premiumViews / stats.totalPlatformPremiumStreams) * (stats.totalPlatformPremiumUsers * 1500)).toLocaleString()} FCFA
                 </span>
              </div>
 

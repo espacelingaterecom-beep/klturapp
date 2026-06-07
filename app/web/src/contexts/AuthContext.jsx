@@ -50,10 +50,28 @@ export const AuthProvider = ({ children }) => {
         supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
           .then(async ({ data: profile, error }) => {
             if (profile && !error) {
+              // Vérification automatique de l'expiration Premium
+              let isStillPremium = profile.is_premium;
+              if (profile.is_premium && profile.premium_until) {
+                const now = new Date();
+                const expiry = new Date(profile.premium_until);
+                if (now > expiry) {
+                  isStillPremium = false;
+                  // Mise à jour silencieuse en base de données
+                  await supabase
+                    .from('profiles')
+                    .update({ is_premium: false, subscription_type: 'free' })
+                    .eq('id', profile.id);
+
+                  toast.error("Votre abonnement Premium a expiré.");
+                }
+              }
+
               const fullUser = {
                 ...baseUser,
                 ...profile,
-                isPremium: profile.is_premium === true,
+                is_premium: isStillPremium,
+                isPremium: isStillPremium === true,
                 isAdmin: profile.is_admin === true
               };
               setCurrentUser(fullUser);

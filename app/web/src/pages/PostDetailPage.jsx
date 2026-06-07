@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Repeat2, Share2, Facebook, Twitter, Trash2, Award, ChevronLeft, Eye } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share2, Facebook, Twitter, Trash2, Award, ChevronLeft, Eye, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -304,7 +304,7 @@ const PostDetailPage = () => {
                   <div>
                     <h2 className="font-bold text-white group-hover:text-[#D4AF37] transition-colors flex items-center gap-1">
                       {artist?.username || artist?.name}
-                      {artist?.is_premium && <Award className="w-3.5 h-3.5 text-[#D4AF37]" />}
+                      {getBadge(artist)}
                     </h2>
                     <p className="text-[10px] text-white/40 uppercase font-black tracking-wider">{new Date(post.created_at).toLocaleDateString()}</p>
                   </div>
@@ -331,7 +331,10 @@ const PostDetailPage = () => {
                         </Avatar>
                         <div className="bg-[#111] p-3 rounded-2xl rounded-tl-none border border-[#222] flex-grow">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-xs text-[#D4AF37]">{comment.profiles?.username}</span>
+                            <span className="font-bold text-xs text-[#D4AF37] flex items-center gap-1">
+                              {comment.profiles?.username}
+                              {getBadge(comment.profiles)}
+                            </span>
                             <span className="text-[10px] text-white/30">{new Date(comment.created_at).toLocaleDateString()}</span>
                           </div>
                           <div className="relative">

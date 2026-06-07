@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Award, Music, Play, Eye, Download, UserPlus, MessageSquare, Edit2, Globe, Youtube, Facebook, Instagram, Twitter, Image as ImageIcon, Heart, Repeat2, Video, MessageCircle, Ghost, Apple, Music2 } from 'lucide-react';
+import { Award, Music, Play, Eye, Download, UserPlus, MessageSquare, Edit2, Globe, Youtube, Facebook, Instagram, Twitter, Image as ImageIcon, Heart, Repeat2, Video, MessageCircle, Ghost, Apple, Music2, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -220,6 +220,16 @@ const PublicArtistProfilePage = () => {
     return { background: '#111111' };
   };
 
+  const getBadge = (user) => {
+    if (user?.subscription_type === 'artist' || user?.is_premium && !user?.subscription_type) {
+      return <Award className="w-6 h-6 text-[#D4AF37]" title="Artiste Certifié" />;
+    }
+    if (user?.subscription_type === 'auditor') {
+      return <ShieldCheck className="w-6 h-6 text-blue-400" title="Auditeur Premium" />;
+    }
+    return null;
+  };
+
   const getSocialIcon = (platform) => {
     const p = platform.toLowerCase();
     if (p.includes('facebook')) return <Facebook className="w-5 h-5" />;
@@ -262,7 +272,7 @@ const PublicArtistProfilePage = () => {
                 <div className="flex-grow text-center md:text-left mt-4 md:mt-0">
                   <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
                     <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight">{artist?.username || artist?.name}</h1>
-                    {artist?.is_premium && <Award className="w-6 h-6 text-[#D4AF37]" title="Certifié" />}
+                    {getBadge(artist)}
                   </div>
                   <p className="text-[#D4AF37] font-bold uppercase tracking-wider text-sm mb-4">{artist?.user_role || 'Artiste'}</p>
                   
