@@ -21,6 +21,7 @@ import TeamPage from './pages/TeamPage.jsx';
 import VolunteerPage from './pages/VolunteerPage.jsx';
 import ContactPage from './pages/ContactPage.jsx';
 import GalleryPage from './pages/GalleryPage.jsx';
+import MusiquePage from './pages/MusiquePage.jsx';
 import SupabaseTest from './pages/SupabaseTest.jsx';
 
 // Auth & Premium Pages
@@ -74,6 +75,7 @@ function App() {
             <Route path="/equipe" element={<TeamPage />} />
             <Route path="/rejoindre" element={<VolunteerPage />} />
             <Route path="/contact" element={<ContactPage />} />
+            <Route path="/musique" element={<MusiquePage />} />
             <Route path="/galerie" element={<GalleryPage />} />
             <Route path="/test-supabase" element={<SupabaseTest />} />
 

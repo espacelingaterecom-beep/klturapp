@@ -70,11 +70,11 @@ const HomePage = () => {
             </motion.p>
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.6 }} className="flex flex-wrap items-center justify-center gap-4">
-              <Link to="/ecouter">
-                <Button className="bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all duration-300 text-lg px-8 py-6 font-bold glow-gold-hover">Écouter la radio</Button>
+              <Link to="/musique">
+                <Button className="bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all duration-300 text-lg px-8 py-6 font-bold glow-gold-hover">Découvrir la musique</Button>
               </Link>
-              <Link to="/evenements">
-                <Button variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black transition-all duration-300 text-lg px-8 py-6 font-bold">Voir les événements</Button>
+              <Link to="/ecouter">
+                <Button variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black transition-all duration-300 text-lg px-8 py-6 font-bold">Écouter la radio</Button>
               </Link>
             </motion.div>
           </div>

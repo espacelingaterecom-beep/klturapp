@@ -46,6 +46,7 @@ const DashboardPage = () => {
     totalPlatformPremiumUsers: 0,
     totalPlatformPremiumStreams: 0
   });
+  const [performanceData, setPerformanceData] = useState([]);
   const [showBannerModal, setShowBannerModal] = useState(false);
   const [showCashoutModal, setShowCashoutModal] = useState(false);
   const [cashoutPhone, setCashoutPhone] = useState('');
@@ -63,12 +64,6 @@ const DashboardPage = () => {
 
   const isPremium = userProfile?.is_premium || userProfile?.isPremium || false;
 
-  // Analytics data
-  const viewData = [
-    { name: 'Lun', v: 400, d: 20 }, { name: 'Mar', v: 700, d: 45 }, { name: 'Mer', v: 600, d: 30 },
-    { name: 'Jeu', v: 1200, d: 80 }, { name: 'Ven', v: 1100, d: 65 }, { name: 'Sam', v: 1800, d: 120 }, { name: 'Dim', v: 1500, d: 90 }
-  ];
-
   useEffect(() => {
     if (currentUser) {
       setUserProfile(currentUser);
@@ -81,7 +76,10 @@ const DashboardPage = () => {
 
       setLoading(true);
       try {
-        const [uploadsResult, followersResult, commentsResult, premiumUsersResult, totalStreamsResult, payoutsResult] = await Promise.all([
+        const last7Days = new Date();
+        last7Days.setDate(last7Days.getDate() - 7);
+
+        const [uploadsResult, followersResult, commentsResult, premiumUsersResult, totalStreamsResult, payoutsResult, recentLikesResult, recentFollowersResult] = await Promise.all([
           supabase
             .from('uploads')
             .select('*', { count: 'exact' })
@@ -107,7 +105,17 @@ const DashboardPage = () => {
             .from('payout_requests')
             .select('*')
             .eq('user_id', currentUser.id)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('likes')
+            .select('created_at, uploads!inner(user_id)')
+            .eq('uploads.user_id', currentUser.id)
+            .gte('created_at', last7Days.toISOString()),
+          supabase
+            .from('followers')
+            .select('created_at')
+            .eq('following_id', currentUser.id)
+            .gte('created_at', last7Days.toISOString())
         ]);
 
         if (uploadsResult.error) throw uploadsResult.error;
@@ -124,6 +132,27 @@ const DashboardPage = () => {
         const totalViews = uploadsData.reduce((acc, curr) => acc + (curr.view_count || 0), 0);
         const totalLikes = uploadsData.reduce((acc, curr) => acc + (curr.likes_count || 0), 0);
         const totalDownloads = uploadsData.reduce((acc, curr) => acc + (curr.download_count || 0), 0);
+
+        // Generate Real Performance Data (Last 7 Days)
+        const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+        const chartData = [];
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dayName = days[date.getDay()];
+          const dateStr = date.toISOString().split('T')[0];
+
+          const dayLikes = (recentLikesResult.data || []).filter(l => l.created_at.startsWith(dateStr)).length;
+          const dayFollows = (recentFollowersResult.data || []).filter(f => f.created_at.startsWith(dateStr)).length;
+
+          chartData.push({
+            name: dayName,
+            v: (dayLikes * 10) + (dayFollows * 5), // Simulated performance index based on real interactions
+            likes: dayLikes,
+            follows: dayFollows
+          });
+        }
+        setPerformanceData(chartData);
 
         // Calculate global platform stats for revenue
         const platformPremiumStreams = (totalStreamsResult.data || []).reduce((acc, curr) => acc + (curr.view_count || 0), 0);
@@ -390,7 +419,7 @@ const DashboardPage = () => {
                               </div>
                               <div className="w-20 h-10">
                                 <ResponsiveContainer width="100%" height="100%">
-                                  <AreaChart data={viewData}>
+                                  <AreaChart data={performanceData}>
                                     <Area type="monotone" dataKey="v" stroke="#D4AF37" fill="#D4AF37" fillOpacity={0.1} strokeWidth={2} />
                                   </AreaChart>
                                 </ResponsiveContainer>
@@ -403,7 +432,7 @@ const DashboardPage = () => {
                               </div>
                               <div className="w-20 h-10">
                                 <ResponsiveContainer width="100%" height="100%">
-                                  <AreaChart data={viewData}>
+                                  <AreaChart data={performanceData}>
                                     <Area type="monotone" dataKey="d" stroke="#fff" fill="#fff" fillOpacity={0.1} strokeWidth={2} />
                                   </AreaChart>
                                 </ResponsiveContainer>
@@ -607,7 +636,7 @@ const DashboardPage = () => {
                         </CardHeader>
                         <CardContent className="h-[400px]">
                            <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={viewData}>
+                              <AreaChart data={performanceData}>
                                  <defs>
                                     <linearGradient id="colorV" x1="0" y1="0" x2="0" y2="1">
                                        <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3}/>
@@ -618,8 +647,8 @@ const DashboardPage = () => {
                                  <XAxis dataKey="name" stroke="#444" fontSize={10} fontWeight="bold" />
                                  <YAxis stroke="#444" fontSize={10} fontWeight="bold" />
                                  <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '12px' }} />
-                                 <Area type="monotone" dataKey="v" name="Vues" stroke="#D4AF37" fillOpacity={1} fill="url(#colorV)" strokeWidth={3} />
-                                 <Area type="monotone" dataKey="d" name="Downloads" stroke="#fff" fillOpacity={0} strokeWidth={2} strokeDasharray="5 5" />
+                                 <Area type="monotone" dataKey="likes" name="Nouveaux Likes" stroke="#D4AF37" fillOpacity={1} fill="url(#colorV)" strokeWidth={3} />
+                                 <Area type="monotone" dataKey="follows" name="Nouveaux Abonnés" stroke="#fff" fillOpacity={0.1} fill="#fff" strokeWidth={2} />
                               </AreaChart>
                            </ResponsiveContainer>
                         </CardContent>
