@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Music, Video, Image as ImageIcon, CheckCircle2, File as FileIcon, Archive } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,8 +20,11 @@ import { formatRichText } from '@/lib/textFormatter.jsx';
 const UploadPage = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditMode = !!id;
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [initialLoading, setInitialLoading] = useState(isEditMode);
+
   const [formData, setFormData] = useState({
     title: '',
     type: '',
@@ -37,6 +41,53 @@ const UploadPage = () => {
     videoFile: null,
     otherFile: null
   });
+
+  const [previews, setPreviews] = useState({
+    coverArt: null
+  });
+
+  useEffect(() => {
+    if (isEditMode) {
+      const fetchProject = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('uploads')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+          if (error) throw error;
+
+          if (data.user_id !== currentUser.id) {
+            toast.error("Vous n'avez pas l'autorisation de modifier ce projet.");
+            navigate('/dashboard');
+            return;
+          }
+
+          setFormData({
+            title: data.title || '',
+            type: data.type || '',
+            genre: data.genre || '',
+            description: data.description || '',
+            collaborators: data.collaborators || '',
+            releaseDate: data.release_date ? new Date(data.release_date).toISOString().split('T')[0] : '',
+            isExplicit: data.is_explicit || false
+          });
+
+          if (data.cover_art) {
+            const { data: urlData } = supabase.storage.from('covers').getPublicUrl(data.cover_art);
+            setPreviews({ coverArt: urlData.publicUrl });
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error("Erreur lors du chargement du projet.");
+        } finally {
+          setInitialLoading(false);
+        }
+      };
+      fetchProject();
+    }
+  }, [id, isEditMode, currentUser.id, navigate]);
 
   const [mentionSuggestions, setMentionSuggestions] = useState([]);
   const [hashtagSuggestions, setHashtagSuggestions] = useState([]);
@@ -110,39 +161,52 @@ const UploadPage = () => {
   };
 
   const handleFileChange = (e) => {
-    setFiles(prev => ({ ...prev, [e.target.name]: e.target.files[0] }));
+    const file = e.target.files[0];
+    const name = e.target.name;
+    setFiles(prev => ({ ...prev, [name]: file }));
+
+    if (name === 'coverArt' && file) {
+      setPreviews(prev => ({ ...prev, coverArt: URL.createObjectURL(file) }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.type || !formData.genre || !formData.releaseDate || !files.coverArt) {
+    if (!formData.title || !formData.type || !formData.genre || !formData.releaseDate) {
       toast.error('Veuillez remplir tous les champs obligatoires');
       return;
     }
 
-    if (formData.type === 'Music Video' && !files.videoFile) {
-      toast.error('Veuillez fournir un fichier vidéo');
+    if (!isEditMode && !files.coverArt) {
+      toast.error('Une image de couverture est obligatoire');
       return;
     }
 
-    const isAudioType = ['Song', 'EP', 'Album', 'Mixtape'].includes(formData.type);
-    if (isAudioType && !files.audioFile) {
-      toast.error('Veuillez fournir un fichier audio');
-      return;
-    }
+    if (!isEditMode) {
+      if (formData.type === 'Music Video' && !files.videoFile) {
+        toast.error('Veuillez fournir un fichier vidéo');
+        return;
+      }
 
-    if (formData.type === 'Other' && !files.otherFile) {
-      toast.error('Veuillez fournir votre fichier');
-      return;
+      const isAudioType = ['Song', 'EP', 'Album', 'Mixtape'].includes(formData.type);
+      if (isAudioType && !files.audioFile) {
+        toast.error('Veuillez fournir un fichier audio');
+        return;
+      }
+
+      if (formData.type === 'Other' && !files.otherFile) {
+        toast.error('Veuillez fournir votre fichier');
+        return;
+      }
     }
 
     setIsSubmitting(true);
 
     try {
       // 1. Upload Files to Storage
-      let coverArtPath = '';
-      let filePath = '';
+      let coverArtPath = null;
+      let filePath = null;
 
       // Upload Cover
       if (files.coverArt) {
@@ -152,14 +216,12 @@ const UploadPage = () => {
           .from('covers')
           .upload(fileName, files.coverArt);
 
-        if (uploadError) {
-          console.error("Storage Cover Error:", uploadError);
-          throw new Error(`Fichier Image: ${uploadError.message}`);
-        }
+        if (uploadError) throw new Error(`Fichier Image: ${uploadError.message}`);
         coverArtPath = uploadData.path;
       }
 
       // Upload Media/File
+      const isAudioType = ['Song', 'EP', 'Album', 'Mixtape'].includes(formData.type);
       let mediaFile = null;
       if (formData.type === 'Music Video') mediaFile = files.videoFile;
       else if (isAudioType) mediaFile = files.audioFile;
@@ -172,50 +234,59 @@ const UploadPage = () => {
           .from('uploads')
           .upload(fileName, mediaFile);
 
-        if (uploadError) {
-          console.error("Storage Upload Error:", uploadError);
-          throw new Error(`Fichier: ${uploadError.message}`);
-        }
+        if (uploadError) throw new Error(`Fichier: ${uploadError.message}`);
         filePath = uploadData.path;
       }
 
-      // 2. Create Record in Database
-      const { data, error } = await supabase
-        .from('uploads')
-        .insert([{
-          user_id: currentUser.id,
-          title: formData.title,
-          type: formData.type,
-          genre: formData.genre,
-          description: formData.description,
-          collaborators: formData.collaborators,
-          release_date: new Date(formData.releaseDate).toISOString(),
-          is_explicit: formData.isExplicit,
-          cover_art: coverArtPath,
-          file_path: filePath
-        }])
-        .select()
-        .single();
+      // 2. Database Record
+      const payload = {
+        title: formData.title,
+        type: formData.type,
+        genre: formData.genre,
+        description: formData.description,
+        collaborators: formData.collaborators,
+        release_date: new Date(formData.releaseDate).toISOString(),
+        is_explicit: formData.isExplicit,
+      };
 
-      if (error) {
-        console.error("Database Insert Error:", error);
-        throw new Error(`Données: ${error.message}`);
+      if (coverArtPath) payload.cover_art = coverArtPath;
+      if (filePath) payload.file_path = filePath;
+
+      if (isEditMode) {
+        const { error } = await supabase
+          .from('uploads')
+          .update(payload)
+          .eq('id', id);
+
+        if (error) throw error;
+        toast.success('Projet mis à jour !');
+        navigate(`/uploads/${id}`);
+      } else {
+        payload.user_id = currentUser.id;
+        const { data, error } = await supabase
+          .from('uploads')
+          .insert([payload])
+          .select()
+          .single();
+
+        if (error) throw error;
+        toast.success('Projet publié avec succès !');
+        navigate(`/uploads/${data.id}`);
       }
-      
-      toast.success('Projet uploadé avec succès !');
-      navigate(`/uploads/${data.id}`);
     } catch (err) {
-      console.error("Full upload error object:", err);
-      toast.error(`Erreur: ${err.message || "Vérifiez la taille des fichiers."}`);
+      console.error(err);
+      toast.error(`Erreur: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (initialLoading) return <div className="min-h-screen bg-black flex items-center justify-center text-[#D4AF37] font-black animate-pulse uppercase">Chargement...</div>;
+
   return (
     <>
       <Helmet>
-        <title>Nouveau Projet - KLTUR RAP</title>
+        <title>{isEditMode ? 'Modifier Projet' : 'Nouveau Projet'} - KLTUR RAP</title>
       </Helmet>
 
       <div className="min-h-screen flex flex-col bg-[#050505]">
@@ -228,8 +299,12 @@ const UploadPage = () => {
               animate={{ opacity: 1, y: 0 }}
               className="mb-8"
             >
-              <h1 className="text-4xl font-black text-white uppercase tracking-tight">Publier un Projet</h1>
-              <p className="text-white/60 font-medium">Partagez votre art avec la communauté KLTUR RAP.</p>
+              <h1 className="text-4xl font-black text-white uppercase tracking-tight">
+                {isEditMode ? 'Modifier le projet' : 'Publier un Projet'}
+              </h1>
+              <p className="text-white/60 font-medium">
+                {isEditMode ? 'Mettez à jour les informations de votre œuvre.' : 'Partagez votre art avec la communauté KLTUR RAP.'}
+              </p>
             </motion.div>
 
             <motion.div
@@ -369,15 +444,17 @@ const UploadPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
                       <Label className="text-white font-bold flex items-center gap-2"><ImageIcon className="w-4 h-4"/> Cover Art <span className="text-[#D4AF37]">*</span></Label>
-                      <div className="border-2 border-dashed border-[#333] rounded-xl p-6 text-center hover:border-[#D4AF37]/50 transition-colors bg-[#111]">
+                    <div className="border-2 border-dashed border-[#333] rounded-xl p-6 text-center hover:border-[#D4AF37]/50 transition-colors bg-[#111] overflow-hidden">
                         <input type="file" name="coverArt" id="coverArt" accept="image/*" className="hidden" onChange={handleFileChange} />
                         <label htmlFor="coverArt" className="cursor-pointer flex flex-col items-center">
-                          {files.coverArt ? (
+                          {previews.coverArt ? (
+                            <img src={previews.coverArt} className="w-20 h-20 object-cover rounded-lg mb-2" alt="Preview" />
+                          ) : files.coverArt ? (
                             <CheckCircle2 className="w-10 h-10 text-[#D4AF37] mb-2" />
                           ) : (
                             <ImageIcon className="w-10 h-10 text-white/20 mb-2" />
                           )}
-                          <span className="text-sm font-medium text-white/80">{files.coverArt ? files.coverArt.name : 'Choisir une image (Max 10MB)'}</span>
+                          <span className="text-sm font-medium text-white/80">{files.coverArt ? files.coverArt.name : (isEditMode ? 'Changer l\'image' : 'Choisir une image (Max 10MB)')}</span>
                         </label>
                       </div>
                     </div>
@@ -449,7 +526,7 @@ const UploadPage = () => {
                   disabled={isSubmitting}
                   className="w-full h-14 bg-[#D4AF37] text-black hover:bg-[#b5952f] transition-all font-black text-lg uppercase tracking-wider"
                 >
-                  {isSubmitting ? 'Upload en cours...' : 'Publier le projet'}
+                  {isSubmitting ? (isEditMode ? 'Mise à jour...' : 'Upload en cours...') : (isEditMode ? 'Enregistrer les modifications' : 'Publier le projet')}
                 </Button>
               </form>
             </motion.div>

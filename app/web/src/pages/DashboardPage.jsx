@@ -597,7 +597,9 @@ const DashboardPage = () => {
                                 <td className="px-6 py-4 text-right">
                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                       <Button asChild size="icon" variant="ghost" className="h-8 w-8 hover:text-[#D4AF37]"><Link to={`/analytics/${u.id}`}><BarChart3 className="w-4 h-4"/></Link></Button>
-                                      <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-white"><Edit2 className="w-4 h-4"/></Button>
+                                      <Button asChild size="icon" variant="ghost" className="h-8 w-8 hover:text-white">
+                                        <Link to={`/uploads/${u.id}/modifier`}><Edit2 className="w-4 h-4"/></Link>
+                                      </Button>
                                       <Button size="icon" variant="ghost" onClick={() => handleDelete(u.id)} className="h-8 w-8 hover:text-red-500"><Trash2 className="w-4 h-4"/></Button>
                                    </div>
                                 </td>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield, WifiOff } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield, WifiOff, LayoutDashboard, Plus } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -42,7 +42,7 @@ const Header = () => {
     { name: 'Messages', path: '/messages' }
   ] : [];
 
-  const navItems = [...publicNavItems, ...artistNavItems];
+  const navItems = publicNavItems;
   const isActive = (path) => location.pathname === path;
 
   useEffect(() => {
@@ -213,30 +213,64 @@ const Header = () => {
                   </Avatar>
                   <ChevronDown className="h-4 w-4 text-white/50 group-hover:text-white" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-[#111] border-[#333] text-white rounded-xl">
+                <DropdownMenuContent align="end" className="w-56 bg-[#0a0a0a] border-[#222] text-white rounded-xl shadow-2xl">
                   {isAdmin && (
-                    <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-[#D4AF37]">
+                    <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-[#D4AF37]">
                       <Link to="/admin" className="flex items-center gap-2 font-bold text-[#D4AF37]">
                         <Shield className="h-4 w-4" /> Administration
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-white">
+
+                  {isAuthenticated && (
+                    <>
+                      <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                        <Link to="/dashboard" className="flex items-center gap-2 font-medium">
+                          <LayoutDashboard className="h-4 w-4 text-[#D4AF37]" /> Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                        <Link to="/creer-post" className="flex items-center gap-2 font-medium">
+                          <Plus className="h-4 w-4 text-[#D4AF37]" /> Publier
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                        <Link to="/upload" className="flex items-center gap-2 font-medium">
+                          <Music className="h-4 w-4 text-[#D4AF37]" /> Télécharger
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                        <Link to="/messages" className="flex items-center justify-between w-full font-medium">
+                          <div className="flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4 text-[#D4AF37]" /> Messages
+                          </div>
+                          {unreadCount > 0 && (
+                            <span className="bg-red-600 text-white text-[9px] h-4 w-4 flex items-center justify-center rounded-full">
+                              {unreadCount}
+                            </span>
+                          )}
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-[#222]" />
+                    </>
+                  )}
+
+                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
                     <Link to={currentUser?.id ? `/profil/${currentUser.id}` : '#'} className="flex items-center gap-2 font-medium">
                       <User className="h-4 w-4" /> Mon Profil
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-white">
+                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
                     <Link to="/modifier-profil" className="flex items-center gap-2 font-medium">
                       <Settings className="h-4 w-4" /> Paramètres
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-white">
+                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
                     <Link to="/ma-musique" className="flex items-center gap-2 font-medium">
                       <WifiOff className="h-4 w-4" /> Mode Hors ligne
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-[#333]" />
+                  <DropdownMenuSeparator className="bg-[#222]" />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer focus:bg-red-900/20 focus:text-red-400 text-red-400 font-bold">
                     <LogOut className="h-4 w-4 mr-2" /> Déconnexion
                   </DropdownMenuItem>
@@ -279,6 +313,26 @@ const Header = () => {
                   <div className="pt-6 border-t border-[#222] space-y-4">
                     <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Mon Compte</p>
                     <div className="flex flex-col gap-4">
+                      <Link to="/dashboard" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <LayoutDashboard className="w-5 h-5 text-[#D4AF37]" /> Dashboard
+                      </Link>
+                      <Link to="/creer-post" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <Plus className="w-5 h-5 text-[#D4AF37]" /> Publier
+                      </Link>
+                      <Link to="/upload" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <Music className="w-5 h-5 text-[#D4AF37]" /> Télécharger
+                      </Link>
+                      <Link to="/messages" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <MessageSquare className="w-5 h-5 text-[#D4AF37]" /> Messages
+                        </div>
+                        {unreadCount > 0 && (
+                          <span className="bg-red-600 text-white text-[10px] h-5 w-5 flex items-center justify-center rounded-full">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </Link>
+                      <DropdownMenuSeparator className="bg-[#222] opacity-50" />
                       <Link to={`/profil/${currentUser?.id}`} onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
                         <User className="w-5 h-5 text-[#D4AF37]" /> Mon Profil
                       </Link>

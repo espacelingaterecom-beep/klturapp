@@ -89,6 +89,7 @@ function App() {
             {/* Uploads Directory */}
             <Route path="/galerie-uploads" element={<UploadsGalleryPage />} />
             <Route path="/uploads/:id" element={<UploadDetailPage />} />
+            <Route path="/uploads/:id/modifier" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
             <Route path="/posts/:id" element={<PostDetailPage />} />
 
             {/* Legal Pages */}

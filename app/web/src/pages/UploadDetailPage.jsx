@@ -612,7 +612,7 @@ const UploadDetailPage = () => {
                 {upload.collaborators && (
                   <div className="mb-6 bg-[#111] p-4 rounded-xl border border-[#333]">
                     <p className="text-[#D4AF37] text-xs font-bold uppercase mb-1">En featuring</p>
-                    <p className="text-white font-medium">{upload.collaborators}</p>
+                    <div className="text-white font-medium">{formatRichText(upload.collaborators)}</div>
                   </div>
                 )}
                 {upload.description ? (
