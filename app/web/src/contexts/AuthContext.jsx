@@ -261,9 +261,9 @@ export const AuthProvider = ({ children }) => {
         <div className="min-h-screen bg-black flex items-center justify-center overflow-hidden">
           <div className="flex flex-col items-center animate-heartbeat px-6 text-center">
             <img
-              src="https://horizons-cdn.hostinger.com/8cb4c9c6-9962-4ccc-80b1-ea71b7a63684/866a587d484c1eedb4c3fd12c56b7757.png"
+              src="/logo-kltur.png"
               alt="Logo KLTUR RAP"
-              className="w-48 h-48 md:w-64 md:h-64 object-contain mb-8"
+              className="w-48 h-48 md:w-64 md:h-64 object-contain mb-8 drop-shadow-[0_0_30px_rgba(212,175,55,0.4)]"
             />
             <h1 className="text-4xl md:text-7xl font-black text-[#D4AF37] tracking-tighter uppercase mb-2 drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]">
               KLTUR RAP

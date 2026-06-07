@@ -124,13 +124,10 @@ const Header = () => {
         <div className="flex items-center justify-between h-20 gap-4">
           <Link to="/" className="flex items-center gap-3 group shrink-0">
             <img
-              src="https://horizons-cdn.hostinger.com/8cb4c9c6-9962-4ccc-80b1-ea71b7a63684/866a587d484c1eedb4c3fd12c56b7757.png"
-              alt="Logo"
-              className="h-10 w-auto transition-transform duration-300 group-hover:scale-105"
+              src="/logo-kltur.png"
+              alt="KLTUR RAP Logo"
+              className="h-14 w-auto transition-transform duration-300 group-hover:scale-105 drop-shadow-[0_0_10px_rgba(212,175,55,0.3)]"
             />
-            <span className="text-xl font-black text-[#D4AF37] tracking-tight hidden sm:block uppercase">
-              KLTUR RAP
-            </span>
           </Link>
 
           {/* Global Search Bar */}

@@ -25,6 +25,8 @@ import ContactPage from './pages/ContactPage.jsx';
 import GalleryPage from './pages/GalleryPage.jsx';
 import MusiquePage from './pages/MusiquePage.jsx';
 import LiveStreamsPage from './pages/LiveStreamsPage.jsx';
+import LiveViewerPage from './pages/LiveViewerPage.jsx';
+import LiveBroadcasterPage from './pages/LiveBroadcasterPage.jsx';
 import ShortsPage from './pages/ShortsPage.jsx';
 import SupabaseTest from './pages/SupabaseTest.jsx';
 
@@ -83,6 +85,8 @@ function App() {
               <Route path="/contact" element={<ContactPage />} />
               <Route path="/musique" element={<MusiquePage />} />
               <Route path="/live" element={<LiveStreamsPage />} />
+              <Route path="/live/:id" element={<LiveViewerPage />} />
+              <Route path="/live/:id/diffuser" element={<ProtectedRoute><LiveBroadcasterPage /></ProtectedRoute>} />
               <Route path="/shorts" element={<ShortsPage />} />
               <Route path="/galerie" element={<GalleryPage />} />
               <Route path="/test-supabase" element={<SupabaseTest />} />
