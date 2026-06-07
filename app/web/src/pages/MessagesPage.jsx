@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
-import { Search, Send, Paperclip, Smile, Award, ChevronLeft, MoreVertical, MessageSquare, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, Send, Paperclip, Smile, Award, ChevronLeft, MoreVertical, MessageSquare, ChevronRight, Trash2, AlertTriangle, Phone, Video, X, Mic, MicOff, VideoOff } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase, subscribeChat, subscribePresence, markConversationRead } from '@/lib/supabaseClient.js';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
+import Peer from 'peerjs';
 
 const MessagesPage = () => {
   const { currentUser, fetchUnreadCount } = useAuth();
@@ -19,6 +21,51 @@ const MessagesPage = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
+  const [callType, setCallType] = useState(null); // 'audio' or 'video'
+  const [callStatus, setCallStatus] = useState(null); // 'outgoing', 'incoming', 'connected'
+
+  const [peer, setPeer] = useState(null);
+  const [myPeerId, setMyPeerId] = useState(null);
+  const [localStream, setMyStream] = useState(null);
+  const [remoteStream, setOtherStream] = useState(null);
+  const myVideoRef = useRef(null);
+  const otherVideoRef = useRef(null);
+  const currentCallRef = useRef(null);
+
+  // Initialize PeerJS
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const newPeer = new Peer(currentUser.id.replace(/-/g, '')); // PeerJS prefers alphanumeric
+
+    newPeer.on('open', (id) => {
+      setMyPeerId(id);
+      console.log('My peer ID is: ' + id);
+    });
+
+    newPeer.on('call', async (incomingCall) => {
+      setCallType('video'); // Default to video for now
+      setCallStatus('incoming');
+      setIsCalling(true);
+      currentCallRef.current = incomingCall;
+    });
+
+    setPeer(newPeer);
+
+    return () => {
+      newPeer.destroy();
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (callStatus === 'connected' && otherVideoRef.current && remoteStream) {
+      otherVideoRef.current.srcObject = remoteStream;
+    }
+    if (isCalling && myVideoRef.current && localStream) {
+      myVideoRef.current.srcObject = localStream;
+    }
+  }, [callStatus, isCalling, localStream, remoteStream]);
 
   useEffect(() => {
     const fetchConvs = async () => {
@@ -194,12 +241,150 @@ const MessagesPage = () => {
     });
   };
 
+  const handleStartCall = async (type) => {
+    if (!activeConv) return;
+    const otherUserId = (activeConv.participant1_id === currentUser.id ? activeConv.participant2_id : activeConv.participant1_id).replace(/-/g, '');
+
+    setCallType(type);
+    setIsCalling(true);
+    setCallStatus('outgoing');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: type === 'video',
+        audio: true
+      });
+      setMyStream(stream);
+
+      const call = peer.call(otherUserId, stream);
+      currentCallRef.current = call;
+
+      call.on('stream', (userOtherStream) => {
+        setOtherStream(userOtherStream);
+        setCallStatus('connected');
+      });
+
+      call.on('close', () => endCall());
+
+    } catch (err) {
+      console.error("Call error:", err);
+      toast.error("Impossible d'accéder à la caméra/micro");
+      endCall();
+    }
+  };
+
+  const answerCall = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      setMyStream(stream);
+
+      currentCallRef.current.answer(stream);
+      currentCallRef.current.on('stream', (userOtherStream) => {
+        setOtherStream(userOtherStream);
+        setCallStatus('connected');
+      });
+    } catch (err) {
+      toast.error("Erreur micro/caméra");
+      endCall();
+    }
+  };
+
+  const endCall = () => {
+    if (currentCallRef.current) currentCallRef.current.close();
+    if (localStream) localStream.getTracks().forEach(track => track.stop());
+
+    setIsCalling(false);
+    setCallType(null);
+    setCallStatus(null);
+    setMyStream(null);
+    setOtherStream(null);
+  };
+
   return (
     <>
       <Helmet><title>Messages - KLTUR RAP</title></Helmet>
-      <div className="h-screen flex flex-col bg-[#050505] overflow-hidden">
+      <div className="h-screen flex flex-col bg-[#050505] overflow-hidden relative">
         <Header />
-        
+
+        {/* Call UI Overlay */}
+        <AnimatePresence>
+          {isCalling && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+              className="absolute inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center p-8"
+            >
+              <div className="relative mb-8">
+                <div className="absolute inset-0 bg-[#D4AF37] rounded-full blur-3xl opacity-20 animate-pulse" />
+                <Avatar className="h-32 w-32 border-4 border-[#D4AF37]">
+                   <AvatarFallback className="bg-[#111] text-[#D4AF37] text-4xl font-black">
+                      {(activeConv.expand?.participant1Id?.id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.username?.[0]}
+                   </AvatarFallback>
+                </Avatar>
+                {callType === 'video' && (
+                  <div className="absolute bottom-0 right-0 bg-green-500 p-2 rounded-full border-4 border-black">
+                    <Video className="w-5 h-5 text-white" />
+                  </div>
+                )}
+              </div>
+
+              <h2 className="text-2xl font-black text-white uppercase mb-1">
+                {(activeConv.expand?.participant1Id?.id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.username}
+              </h2>
+              <p className="text-[#D4AF37] font-bold uppercase tracking-widest text-xs mb-12 animate-pulse">
+                {callStatus === 'outgoing' ? 'Appel en cours...' : callStatus === 'incoming' ? 'Appel entrant...' : 'Connecté'}
+              </p>
+
+              <div className="flex gap-8 items-center">
+                 {callStatus === 'incoming' ? (
+                   <Button onClick={answerCall} className="h-20 w-20 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-2xl shadow-green-500/20">
+                      <Phone className="w-8 h-8" />
+                   </Button>
+                 ) : (
+                   <Button variant="outline" size="icon" className="h-16 w-16 rounded-full border-[#222] bg-[#111] text-white hover:bg-[#222]">
+                      <MicOff className="w-6 h-6" />
+                   </Button>
+                 )}
+
+                 <Button onClick={endCall} className="h-20 w-20 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-2xl shadow-red-500/20">
+                    <X className="w-8 h-8" />
+                 </Button>
+
+                 {callStatus !== 'incoming' && (
+                    <Button variant="outline" size="icon" className="h-16 w-16 rounded-full border-[#222] bg-[#111] text-white hover:bg-[#222]">
+                       <VideoOff className="w-6 h-6" />
+                    </Button>
+                 )}
+              </div>
+
+              {callType === 'video' && (
+                <div className="mt-10 flex flex-col items-center gap-4 w-full max-w-4xl px-4">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full h-[300px]">
+                      <div className="relative bg-[#111] rounded-3xl border border-[#222] overflow-hidden">
+                         <video ref={myVideoRef} autoPlay muted playsInline className="w-full h-full object-cover mirror" />
+                         <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1 rounded-full text-[8px] font-black text-white uppercase">Moi</div>
+                      </div>
+                      <div className="relative bg-[#111] rounded-3xl border border-[#222] overflow-hidden">
+                         {callStatus === 'connected' ? (
+                           <video ref={otherVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                         ) : (
+                           <div className="flex items-center justify-center h-full text-white/10 uppercase font-black text-[10px] tracking-widest animate-pulse">
+                              En attente...
+                           </div>
+                         )}
+                         <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-widest">
+                            {(activeConv.expand?.participant1Id?.id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.username}
+                         </div>
+                      </div>
+                   </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <main className="flex-grow flex max-w-7xl mx-auto w-full h-[calc(100vh-80px)] border-x border-[#222] bg-[#0a0a0a]">
           {/* Conversation List View */}
           {!activeConv ? (
@@ -305,34 +490,43 @@ const MessagesPage = () => {
                     </div>
                   </div>
                 </div>
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-white/20 hover:text-white rounded-full">
-                      <MoreVertical className="w-5 h-5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-[#111] border-[#222] text-white">
-                    <DropdownMenuItem
-                      onClick={() => navigate(`/profil/${(activeConv.participant1_id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.id}`)}
-                      className="cursor-pointer"
-                    >
-                      Voir le profil
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-[#222]" />
-                    <DropdownMenuItem
-                      onClick={handleDeleteConversation}
-                      className="text-red-500 cursor-pointer focus:text-red-500"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Supprimer la conversation
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-white/50 cursor-pointer">
-                      <AlertTriangle className="w-4 h-4 mr-2" />
-                      Signaler
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => handleStartCall('audio')} className="text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-full">
+                    <Phone className="w-5 h-5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleStartCall('video')} className="text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-full">
+                    <Video className="w-5 h-5" />
+                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="text-white/20 hover:text-white rounded-full">
+                        <MoreVertical className="w-5 h-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-[#111] border-[#222] text-white">
+                      <DropdownMenuItem
+                        onClick={() => navigate(`/profil/${(activeConv.participant1_id === currentUser.id ? activeConv.expand?.participant2Id : activeConv.expand?.participant1Id)?.id}`)}
+                        className="cursor-pointer"
+                      >
+                        Voir le profil
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-[#222]" />
+                      <DropdownMenuItem
+                        onClick={handleDeleteConversation}
+                        className="text-red-500 cursor-pointer focus:text-red-500"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Supprimer la conversation
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-white/50 cursor-pointer">
+                        <AlertTriangle className="w-4 h-4 mr-2" />
+                        Signaler
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               {/* Messages Area */}

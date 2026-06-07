@@ -29,6 +29,8 @@ const Header = () => {
   const publicNavItems = [
     { name: 'Accueil', path: '/' },
     { name: 'Musique', path: '/musique' },
+    { name: 'Live', path: '/live' },
+    { name: 'Shorts', path: '/shorts' },
     { name: 'Artistes', path: '/artistes' },
     { name: 'Actualités', path: '/actualites' },
     { name: 'Galerie', path: '/galerie' },

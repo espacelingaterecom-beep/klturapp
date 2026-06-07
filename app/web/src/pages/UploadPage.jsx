@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Music, Video, Image as ImageIcon, CheckCircle2, File as FileIcon, Archive } from 'lucide-react';
+import { Music, Video, Image as ImageIcon, CheckCircle2, File as FileIcon, Archive, Zap } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Button } from '@/components/ui/button';
@@ -223,15 +223,16 @@ const UploadPage = () => {
       // Upload Media/File
       const isAudioType = ['Song', 'EP', 'Album', 'Mixtape'].includes(formData.type);
       let mediaFile = null;
-      if (formData.type === 'Music Video') mediaFile = files.videoFile;
+      if (formData.type === 'Music Video' || formData.type === 'Short') mediaFile = files.videoFile;
       else if (isAudioType) mediaFile = files.audioFile;
       else mediaFile = files.otherFile;
 
       if (mediaFile) {
         const ext = mediaFile.name.split('.').pop();
         const fileName = `${currentUser.id}/${Date.now()}_file.${ext}`;
+        const bucket = formData.type === 'Short' ? 'shorts' : 'uploads';
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('uploads')
+          .from(bucket)
           .upload(fileName, mediaFile);
 
         if (uploadError) throw new Error(`Fichier: ${uploadError.message}`);
@@ -239,6 +240,21 @@ const UploadPage = () => {
       }
 
       // 2. Database Record
+      if (formData.type === 'Short') {
+        const { error } = await supabase
+          .from('shorts')
+          .insert([{
+            user_id: currentUser.id,
+            video_url: getPublicImageUrl('shorts', filePath),
+            caption: formData.description,
+            title: formData.title
+          }]);
+        if (error) throw error;
+        toast.success('Short publié avec succès !');
+        navigate('/shorts');
+        return;
+      }
+
       const payload = {
         title: formData.title,
         type: formData.type,
@@ -341,6 +357,7 @@ const UploadPage = () => {
                           <SelectItem value="Album">Album</SelectItem>
                           <SelectItem value="Mixtape">Mixtape</SelectItem>
                           <SelectItem value="Music Video">Clip Vidéo</SelectItem>
+                          <SelectItem value="Short">KLTUR Short (Freestyle vertical)</SelectItem>
                           <SelectItem value="Other">Autre (PDF, ZIP, Document...)</SelectItem>
                         </SelectContent>
                       </Select>
@@ -459,9 +476,12 @@ const UploadPage = () => {
                       </div>
                     </div>
 
-                    {formData.type === 'Music Video' ? (
+                    {formData.type === 'Music Video' || formData.type === 'Short' ? (
                       <div className="space-y-3">
-                        <Label className="text-white font-bold flex items-center gap-2"><Video className="w-4 h-4"/> Fichier Vidéo <span className="text-[#D4AF37]">*</span></Label>
+                        <Label className="text-white font-bold flex items-center gap-2">
+                          {formData.type === 'Short' ? <Zap className="w-4 h-4 text-[#D4AF37]"/> : <Video className="w-4 h-4"/>}
+                          {formData.type === 'Short' ? 'Vidéo Verticale (9:16)' : 'Fichier Vidéo'} <span className="text-[#D4AF37]">*</span>
+                        </Label>
                         <div className="border-2 border-dashed border-[#333] rounded-xl p-6 text-center hover:border-[#D4AF37]/50 transition-colors bg-[#111]">
                           <input type="file" name="videoFile" id="videoFile" accept="video/mp4,video/webm" className="hidden" onChange={handleFileChange} />
                           <label htmlFor="videoFile" className="cursor-pointer flex flex-col items-center">
@@ -473,6 +493,9 @@ const UploadPage = () => {
                             <span className="text-sm font-medium text-white/80">{files.videoFile ? files.videoFile.name : 'Choisir une vidéo (MP4/WEBM, Max 500MB)'}</span>
                           </label>
                         </div>
+                        {formData.type === 'Short' && (
+                          <p className="text-[10px] text-white/30 italic">Note: Les Shorts doivent être au format vertical pour un meilleur rendu.</p>
+                        )}
                       </div>
                     ) : ['Song', 'EP', 'Album', 'Mixtape'].includes(formData.type) ? (
                       <div className="space-y-3">
