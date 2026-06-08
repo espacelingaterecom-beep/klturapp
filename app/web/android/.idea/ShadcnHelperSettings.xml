@@ -2430,6 +2430,66 @@
         <option name="homepage" value="https://zippystarter.com" />
         <option name="urlTemplate" value="https://zippystarter.com/r/{name}.json" />
       </RegistryConfigState>
+      <RegistryConfigState>
+        <option name="id" value="central-cubby-ui" />
+        <option name="name" value="Cubby-ui" />
+        <option name="namespace" value="@cubby-ui" />
+        <option name="baseUrl" value="https://www.cubby-ui.dev/r" />
+        <option name="stylePath" value="/{name}.json" />
+        <option name="type" value="community" />
+        <option name="enabled" value="false" />
+        <option name="description" value="An opinionated component library with curated styling and simplified patterns for common use cases. Built on Base UI and Tailwind CSS 4." />
+        <option name="homepage" value="https://www.cubby-ui.dev" />
+        <option name="urlTemplate" value="https://www.cubby-ui.dev/r/{name}.json" />
+      </RegistryConfigState>
+      <RegistryConfigState>
+        <option name="id" value="central-extend" />
+        <option name="name" value="Extend" />
+        <option name="namespace" value="@extend" />
+        <option name="baseUrl" value="https://ui.extend.ai/r" />
+        <option name="stylePath" value="/{name}.json" />
+        <option name="type" value="community" />
+        <option name="enabled" value="false" />
+        <option name="description" value="A collection of UI components for building document agents and human-in-the-loop review workflows." />
+        <option name="homepage" value="https://ui.extend.ai" />
+        <option name="urlTemplate" value="https://ui.extend.ai/r/{name}.json" />
+      </RegistryConfigState>
+      <RegistryConfigState>
+        <option name="id" value="central-gamekitui" />
+        <option name="name" value="Gamekitui" />
+        <option name="namespace" value="@gamekitui" />
+        <option name="baseUrl" value="https://gamekitui.com/r" />
+        <option name="stylePath" value="/{name}.json" />
+        <option name="type" value="community" />
+        <option name="enabled" value="false" />
+        <option name="description" value="Drop-in, themeable browser games for shadcn — Snake, 2048, Minesweeper, and more. Each is a single self-contained file with zero dependencies." />
+        <option name="homepage" value="https://gamekitui.com" />
+        <option name="urlTemplate" value="https://gamekitui.com/r/{name}.json" />
+      </RegistryConfigState>
+      <RegistryConfigState>
+        <option name="id" value="central-grootstudio" />
+        <option name="name" value="Grootstudio" />
+        <option name="namespace" value="@grootstudio" />
+        <option name="baseUrl" value="https://grootstudio.vercel.app/r" />
+        <option name="stylePath" value="/{name}.json" />
+        <option name="type" value="community" />
+        <option name="enabled" value="false" />
+        <option name="description" value="A premium, open source component registry for SEO-friendly, high-performance React applications" />
+        <option name="homepage" value="https://grootstudio.vercel.app" />
+        <option name="urlTemplate" value="https://grootstudio.vercel.app/r/{name}.json" />
+      </RegistryConfigState>
+      <RegistryConfigState>
+        <option name="id" value="central-soralabs" />
+        <option name="name" value="Soralabs" />
+        <option name="namespace" value="@soralabs" />
+        <option name="baseUrl" value="https://ui.soralabs.io.vn/r" />
+        <option name="stylePath" value="/{name}.json" />
+        <option name="type" value="community" />
+        <option name="enabled" value="false" />
+        <option name="description" value="Motion-first React primitives and animated UI components for shadcn/ui. Copy, customize, and ship fluid interfaces." />
+        <option name="homepage" value="https://ui.soralabs.io.vn" />
+        <option name="urlTemplate" value="https://ui.soralabs.io.vn/r/{name}.json" />
+      </RegistryConfigState>
     </registryConfigs>
   </component>
 </project>

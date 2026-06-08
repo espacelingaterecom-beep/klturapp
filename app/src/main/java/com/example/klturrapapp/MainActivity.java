@@ -21,7 +21,7 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient());
         
         // Point to the live Netlify production URL
-        webView.loadUrl("https://klturrap.netlify.app/");
+        webView.loadUrl("https://kltur-rap.netlify.app/");
         
         setContentView(webView);
     }

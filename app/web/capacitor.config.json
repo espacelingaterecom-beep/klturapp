@@ -1,7 +1,7 @@
 {
   "appId": "com.klturrap.app",
   "appName": "KLTUR RAP",
-  "webDir": "../../dist/apps/web",
+  "webDir":"../../dist/apps/web",
   "bundledWebRuntime": false,
   "plugins": {
     "SplashScreen": {
