@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, Radio, Newspaper, Link as LinkIcon, FileAudio, UserCircle } from 'lucide-react';
+import { Shield, Calendar, Users, Music, Plus, Trash2, Image as ImageIcon, Camera, Star, Award, Edit, X, Eye, Download, Heart, MessageSquare, ChevronRight, ChevronDown, BarChart3, Newspaper, Radio, Trophy, Settings, TrendingUp, DollarSign, FileSpreadsheet, FileText, DownloadCloud, Wallet, ShieldCheck, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
@@ -26,29 +30,87 @@ const AdminDashboard = () => {
   const [events, setEvents] = useState([]);
   const [users, setUsers] = useState([]);
   const [contents, setContents] = useState([]);
-  const [radioEpisodes, setRadioEpisodes] = useState([]);
   const [news, setNews] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]);
+  const [radioEpisodes, setRadioEpisodes] = useState([]);
+  const [payoutRequests, setPayoutRequests] = useState([]);
+  const [subscriptionRequests, setSubscriptionRequests] = useState([]);
+  const [analytics, setAnalytics] = useState({
+    totalViews: 0,
+    totalDownloads: 0,
+    totalLikes: 0,
+    userGrowth: [],
+    contentDistribution: []
+  });
 
   // Form states
   const [newEvent, setNewEvent] = useState({ title: '', date: '', location: '', event_type: 'Concert', description: '' });
   const [eventImage, setEventImage] = useState(null);
   const [eventImagePreview, setEventImagePreview] = useState(null);
 
-  const [newEpisode, setNewEpisode] = useState({ title: '', date: '', duration: '', description: '', audio_url: '' });
-  const [audioSourceType, setAudioSourceType] = useState('link'); // 'link' or 'file'
-  const [audioFile, setAudioFile] = useState(null);
+  const [newNews, setNewNews] = useState({ title: '', content: '', category: 'News', source_url: '', published_at: new Date().toISOString().slice(0, 16) });
+  const [newsImage, setNewsImage] = useState(null);
+  const [newsImagePreview, setNewsImagePreview] = useState(null);
 
-  const [newNews, setNewNews] = useState({ title: '', category: 'News', excerpt: '', content: '', image_url: '', source_url: '' });
-
-  const [newMember, setNewMember] = useState({ name: '', role: '', bio: '', image_url: '' });
+  const [newRadio, setNewRadio] = useState({ title: '', description: '', is_external: false, external_url: '', date: new Date().toISOString().slice(0, 16) });
+  const [radioFile, setRadioFile] = useState(null);
 
   // Edit states
   const [editingEvent, setEditingEvent] = useState(null);
-  const [editingEpisode, setEditingEpisode] = useState(null);
   const [editingNews, setEditingNews] = useState(null);
-  const [editingMember, setEditingMember] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
+
+  const fetchUrlMetadata = async (url) => {
+    if (!url || !url.startsWith('http')) return;
+
+    setIsFetchingMetadata(true);
+    try {
+      // 1. Spécifique YouTube (OEmbed est génial pour ça)
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+        const data = await res.json();
+
+        if (data) {
+          setNewNews(prev => ({
+            ...prev,
+            title: prev.title || data.title,
+            content: prev.content || `Vidéo partagée : ${data.title}`
+          }));
+
+          if (data.thumbnail_url) {
+            setNewsImagePreview(data.thumbnail_url);
+            // On peut tenter de convertir l'image distante en File plus tard si besoin
+            // mais ici on garde au moins la prévisualisation
+          }
+          toast.success("Infos YouTube chargées !");
+          return;
+        }
+      }
+
+      // 2. Pour les autres sites, on tente un scraper basique via un service gratuit (OpenGraph.io ou similaire)
+      // Note: Sans clé API, on peut tenter Microlink (gratuit pour les petits usages)
+      const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
+      const { data } = await res.json();
+
+      if (data) {
+        setNewNews(prev => ({
+          ...prev,
+          title: prev.title || data.title,
+          content: prev.content || data.description
+        }));
+
+        if (data.image?.url) {
+          setNewsImagePreview(data.image.url);
+        }
+        toast.success("Métadonnées récupérées !");
+      }
+    } catch (err) {
+      console.error("Metadata fetch error:", err);
+      // On ne bloque pas l'utilisateur si ça échoue
+    } finally {
+      setIsFetchingMetadata(false);
+    }
+  };
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -82,48 +144,40 @@ const AdminDashboard = () => {
   }, [currentUser, navigate]);
 
   const loadAllData = async () => {
-    // 1. Fetch Events
     try {
-      const { data: evs } = await supabase.from('events').select('*').order('date', { ascending: true });
-      setEvents(evs || []);
-    } catch (e) { console.error("Events error", e); }
+      // 1. Fetch Events
+      const { data: evs, error: eErr } = await supabase.from('events').select('*').order('date', { ascending: true });
+      if (!eErr) setEvents(evs || []);
 
-    // Fetch Radio Episodes
-    try {
-      const { data: rad } = await supabase.from('radio_episodes').select('*').order('date', { ascending: false });
-      setRadioEpisodes(rad || []);
-    } catch (e) { console.error("Radio error", e); }
-
-    // Fetch News
-    try {
-      const { data: nw } = await supabase.from('news').select('*').order('created_at', { ascending: false });
-      setNews(nw || []);
-    } catch (e) { console.error("News error", e); }
-
-    // Fetch Team
-    try {
-      const { data: tm } = await supabase.from('team_members').select('*').order('created_at', { ascending: true });
-      setTeamMembers(tm || []);
-    } catch (e) { console.error("Team error", e); }
-
-    // 2. Fetch Users (Indépendant et Robuste)
-    try {
+      // 2. Fetch Users
       const { data: usrs, error: uErr } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (uErr) {
-        // Fallback sans tri si la colonne created_at manque
-        const { data: fallbackUsrs } = await supabase.from('profiles').select('*');
-        setUsers(fallbackUsrs || []);
-      } else {
-        setUsers(usrs || []);
-      }
-    } catch (e) {
-      console.error("Users fetch error", e);
-    }
+      if (!uErr) setUsers(usrs || []);
 
-    // 3. Fetch Contents
-    try {
+      // 3. Fetch News
+      const { data: nws, error: nErr } = await supabase.from('news').select('*, profiles:author_id(username)').order('created_at', { ascending: false });
+      if (!nErr) setNews(nws || []);
+
+      // 4. Fetch Contents (Uploads & Posts)
       const { data: ups } = await supabase.from('uploads').select('*, profiles:user_id(username)');
       const { data: pts } = await supabase.from('posts').select('*, profiles:user_id(username)');
+
+      // 5. Fetch Radio Episodes
+      const { data: radioEvs, error: rErr } = await supabase.from('radio_episodes').select('*').order('created_at', { ascending: false });
+      if (!rErr) setRadioEpisodes(radioEvs || []);
+
+      // 6. Fetch Payout Requests
+      const { data: payouts, error: pErr } = await supabase
+        .from('payout_requests')
+        .select('*, profiles:user_id(username, email, avatar)')
+        .order('created_at', { ascending: false });
+      if (!pErr) setPayoutRequests(payouts || []);
+
+      // 7. Fetch Subscription Requests
+      const { data: subs, error: sErr } = await supabase
+        .from('subscription_requests')
+        .select('*, profiles:user_id(username, email, avatar)')
+        .order('created_at', { ascending: false });
+      if (!sErr) setSubscriptionRequests(subs || []);
 
       const combined = [
         ...(ups || []).map(u => ({ ...u, contentType: 'Upload' })),
@@ -131,16 +185,113 @@ const AdminDashboard = () => {
       ].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
       setContents(combined);
+
+      // 6. Calculate Analytics
+      const totalViews = (ups || []).reduce((acc, u) => acc + (u.view_count || 0), 0);
+      const totalDownloads = (ups || []).reduce((acc, u) => acc + (u.download_count || 0), 0);
+      const totalLikes = [...(ups || []), ...(pts || [])].reduce((acc, c) => acc + (c.likes_count || 0), 0);
+
+      setAnalytics({
+        totalViews,
+        totalDownloads,
+        totalLikes,
+        userGrowth: [
+          { name: 'Début', users: 0, content: 0 },
+          { name: 'Actuel', users: usrs?.length || 0, content: combined?.length || 0 }
+        ],
+        contentDistribution: [
+          { name: 'Musique', value: ups?.length || 0 },
+          { name: 'Posts', value: pts?.length || 0 },
+          { name: 'News', value: nws?.length || 0 },
+        ]
+      });
+
     } catch (e) {
-      console.error("Contents fetch error", e);
+      console.error("Data loading error", e);
     }
+  };
+
+  const handleCreateOrUpdateNews = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      let imageUrl = editingNews?.image_url || null;
+
+      // Priorité 1: Image uploadée manuellement
+      if (newsImage) {
+        const fileExt = newsImage.name.split('.').pop();
+        const fileName = `news/${Date.now()}.${fileExt}`;
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('covers')
+          .upload(fileName, newsImage);
+        if (storageError) throw storageError;
+        imageUrl = storageData.path;
+      }
+      // Priorité 2: Image détectée via URL (si aucune image manuelle n'est fournie)
+      else if (newsImagePreview && newsImagePreview.startsWith('http')) {
+        imageUrl = newsImagePreview;
+      }
+
+      const newsData = {
+        title: newNews.title,
+        content: newNews.content,
+        category: newNews.category,
+        source_url: newNews.source_url,
+        published_at: newNews.published_at,
+        image_url: imageUrl,
+        author_id: currentUser.id
+      };
+
+      if (editingNews) {
+        const { error } = await supabase.from('news').update(newsData).eq('id', editingNews.id);
+        if (error) throw error;
+        toast.success("Actualité mise à jour !");
+      } else {
+        const { error } = await supabase.from('news').insert([newsData]);
+        if (error) throw error;
+        toast.success("Actualité publiée !");
+      }
+
+      setNewNews({ title: '', content: '', category: 'News', source_url: '' });
+      setNewsImage(null);
+      setNewsImagePreview(null);
+      setEditingNews(null);
+      loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteNews = async (id) => {
+    if (!window.confirm("Supprimer cette actualité ?")) return;
+    const { error } = await supabase.from('news').delete().eq('id', id);
+    if (!error) {
+      toast.success("Actualité supprimée");
+      loadAllData();
+    }
+  };
+
+  const startEditNews = (n) => {
+    setEditingNews(n);
+    setNewNews({
+      title: n.title,
+      content: n.content,
+      category: n.category || 'News',
+      source_url: n.source_url || '',
+      published_at: new Date(n.published_at || n.created_at).toISOString().slice(0, 16)
+    });
+    setNewsImagePreview(n.image_url ? getPublicImageUrl('covers', n.image_url) : null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCreateOrUpdateEvent = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      let imagePath = editingEvent?.image || editingEvent?.image_url || null;
+      let imageUrl = editingEvent?.image || null;
 
       if (eventImage) {
         const fileExt = eventImage.name.split('.').pop();
@@ -149,7 +300,7 @@ const AdminDashboard = () => {
           .from('covers')
           .upload(fileName, eventImage);
         if (storageError) throw storageError;
-        imagePath = storageData.path;
+        imageUrl = storageData.path;
       }
 
       const eventData = {
@@ -158,7 +309,7 @@ const AdminDashboard = () => {
         location: newEvent.location,
         event_type: newEvent.event_type,
         description: newEvent.description,
-        image: imagePath, // Réactivé
+        image: imageUrl,
         organizer_id: currentUser.id
       };
 
@@ -194,8 +345,27 @@ const AdminDashboard = () => {
       event_type: event.event_type || 'Concert',
       description: event.description || ''
     });
-    setEventImagePreview((event.image || event.image_url) ? getPublicImageUrl('covers', event.image || event.image_url) : null);
+    setEventImagePreview(event.image ? getPublicImageUrl('covers', event.image) : null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleUpdateRadioSettings = async (e) => {
+    e.preventDefault();
+    const liveUrl = e.target.liveUrl.value;
+    if (!liveUrl) return;
+
+    const loadingToast = toast.loading("Mise à jour du direct...");
+    try {
+      const { error } = await supabase
+        .from('platform_settings')
+        .upsert({ id: 'radio_live', value: liveUrl }, { onConflict: 'id' });
+
+      if (error) throw error;
+      toast.success("Le lien de la radio en direct a été mis à jour !", { id: loadingToast });
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la mise à jour", { id: loadingToast });
+    }
   };
 
   const cancelEdit = () => {
@@ -205,184 +375,110 @@ const AdminDashboard = () => {
     setEventImagePreview(null);
   };
 
-  const handleCreateOrUpdateEpisode = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const activateUserSubscription = async (userId, type) => {
+    const loadingToast = toast.loading("Activation de l'abonnement...");
     try {
-      let finalAudioUrl = newEpisode.audio_url;
+      const expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
 
-      if (audioSourceType === 'file' && audioFile) {
-        const fileExt = audioFile.name.split('.').pop();
-        const fileName = `radio/${Date.now()}.${fileExt}`;
-        const { data: storageData, error: storageError } = await supabase.storage
-          .from('uploads') // On peut réutiliser le bucket uploads ou en créer un 'radio'
-          .upload(fileName, audioFile);
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_premium: true,
+          subscription_type: type,
+          premium_until: expiryDate.toISOString()
+        })
+        .eq('id', userId);
 
-        if (storageError) throw storageError;
+      if (error) throw error;
 
-        // Obtenir l'URL publique
-        const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(storageData.path);
-        finalAudioUrl = publicUrl;
-      }
-
-      const episodeData = {
-        title: newEpisode.title,
-        date: newEpisode.date,
-        duration: newEpisode.duration,
-        description: newEpisode.description,
-        audio_url: finalAudioUrl
-      };
-
-      if (editingEpisode) {
-        const { error } = await supabase.from('radio_episodes').update(episodeData).eq('id', editingEpisode.id);
-        if (error) throw error;
-        toast.success("Épisode mis à jour !");
-      } else {
-        const { error } = await supabase.from('radio_episodes').insert([episodeData]);
-        if (error) throw error;
-        toast.success("Épisode publié !");
-      }
-
-      setNewEpisode({ title: '', date: '', duration: '', description: '', audio_url: '' });
-      setAudioFile(null);
-      setAudioSourceType('link');
-      setEditingEpisode(null);
+      toast.success("Abonnement activé pour 1 mois !", { id: loadingToast });
       loadAllData();
     } catch (err) {
       console.error(err);
-      toast.error(`Erreur: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const startEditEpisode = (ep) => {
-    setEditingEpisode(ep);
-    setNewEpisode({
-      title: ep.title,
-      date: ep.date,
-      duration: ep.duration,
-      description: ep.description || '',
-      audio_url: ep.audio_url || ''
-    });
-    setAudioSourceType('link');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDeleteEpisode = async (id) => {
-    if (!window.confirm("Supprimer cet épisode ?")) return;
-    const { error } = await supabase.from('radio_episodes').delete().eq('id', id);
-    if (error) toast.error("Erreur de suppression");
-    else {
-      toast.success("Épisode supprimé");
-      loadAllData();
-    }
-  };
-
-  const handleCreateOrUpdateNews = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const newsData = {
-        ...newNews,
-        author_id: currentUser.id
-      };
-
-      if (editingNews) {
-        const { error } = await supabase.from('news').update(newsData).eq('id', editingNews.id);
-        if (error) throw error;
-        toast.success("Article mis à jour !");
-      } else {
-        const { error } = await supabase.from('news').insert([newsData]);
-        if (error) throw error;
-        toast.success("Article publié !");
-      }
-
-      setNewNews({ title: '', category: 'News', excerpt: '', content: '', image_url: '', source_url: '' });
-      setEditingNews(null);
-      loadAllData();
-    } catch (err) {
-      console.error(err);
-      toast.error(`Erreur: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const startEditNews = (n) => {
-    setEditingNews(n);
-    setNewNews({
-      title: n.title,
-      category: n.category || 'News',
-      excerpt: n.excerpt || '',
-      content: n.content || '',
-      image_url: n.image_url || '',
-      source_url: n.source_url || ''
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDeleteNews = async (id) => {
-    if (!window.confirm("Supprimer cet article ?")) return;
-    const { error } = await supabase.from('news').delete().eq('id', id);
-    if (error) toast.error("Erreur de suppression");
-    else {
-      toast.success("Article supprimé");
-      loadAllData();
-    }
-  };
-
-  const handleCreateOrUpdateMember = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      if (editingMember) {
-        const { error } = await supabase.from('team_members').update(newMember).eq('id', editingMember.id);
-        if (error) throw error;
-        toast.success("Membre mis à jour !");
-      } else {
-        const { error } = await supabase.from('team_members').insert([newMember]);
-        if (error) throw error;
-        toast.success("Membre ajouté !");
-      }
-
-      setNewMember({ name: '', role: '', bio: '', image_url: '' });
-      setEditingMember(null);
-      loadAllData();
-    } catch (err) {
-      console.error(err);
-      toast.error(`Erreur: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const startEditMember = (m) => {
-    setEditingMember(m);
-    setNewMember({
-      name: m.name,
-      role: m.role,
-      bio: m.bio || '',
-      image_url: m.image_url || ''
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDeleteMember = async (id) => {
-    if (!window.confirm("Supprimer ce membre de l'équipe ?")) return;
-    const { error } = await supabase.from('team_members').delete().eq('id', id);
-    if (error) toast.error("Erreur de suppression");
-    else {
-      toast.success("Membre supprimé");
-      loadAllData();
+      toast.error("Erreur lors de l'activation", { id: loadingToast });
     }
   };
 
   const toggleUserPremium = async (userId, currentStatus) => {
-    const { error } = await supabase.from('profiles').update({ is_premium: !currentStatus }).eq('id', userId);
-    if (!error) {
-      toast.success("Statut premium mis à jour");
+    if (currentStatus) {
+      const { error } = await supabase.from('profiles').update({
+        is_premium: false,
+        subscription_type: 'free',
+        premium_until: null
+      }).eq('id', userId);
+
+      if (!error) {
+        toast.success("Certification retirée");
+        loadAllData();
+      }
+    }
+  };
+
+  const toggleUserAdmin = async (userId, currentStatus) => {
+    if (userId === currentUser.id) {
+      toast.error("Vous ne pouvez pas retirer vos propres droits admin");
+      return;
+    }
+
+    const loadingToast = toast.loading("Mise à jour du rôle...");
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_admin: !currentStatus })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      toast.success(!currentStatus ? "Nouvel administrateur ajouté !" : "Accès admin retiré", { id: loadingToast });
+
+      // Forcer le rechargement des données
+      await loadAllData();
+    } catch (err) {
+      console.error("Admin toggle error:", err);
+      toast.error(`Erreur: ${err.message || "Action impossible"}`, { id: loadingToast });
+    }
+  };
+
+  const handleCreateRadioEpisode = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      let audioUrl = null;
+
+      if (!newRadio.is_external && radioFile) {
+        const fileExt = radioFile.name.split('.').pop();
+        const fileName = `radio/${Date.now()}.${fileExt}`;
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('uploads')
+          .upload(fileName, radioFile);
+        if (storageError) throw storageError;
+        audioUrl = storageData.path;
+      }
+
+      const radioData = {
+        title: newRadio.title,
+        description: newRadio.description,
+        is_external: newRadio.is_external,
+        audio_url: audioUrl,
+        external_url: newRadio.external_url,
+        date: newRadio.date,
+        created_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase.from('radio_episodes').insert([radioData]);
+      if (error) throw error;
+
+      toast.success("Épisode radio ajouté !");
+      setNewRadio({ title: '', description: '', is_external: false, external_url: '', date: new Date().toISOString().slice(0, 16) });
+      setRadioFile(null);
       loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error(`Erreur Radio: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -406,8 +502,124 @@ const AdminDashboard = () => {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-[#D4AF37] font-black text-2xl animate-pulse">KLTUR RAP ADMIN...</div>;
-  if (!isAdmin) return null;
+  const handleDeleteRadioEpisode = async (id) => {
+    if (!window.confirm("Supprimer cet épisode radio ?")) return;
+    try {
+      const { error } = await supabase.from('radio_episodes').delete().eq('id', id);
+      if (error) throw error;
+      toast.success("Épisode supprimé");
+      loadAllData();
+    } catch (err) {
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  const handleUpdatePayoutStatus = async (id, newStatus) => {
+    const loadingToast = toast.loading(`Mise à jour du statut...`);
+
+    // Mise à jour locale immédiate pour la réactivité (Optimistic UI)
+    setPayoutRequests(prev => prev.map(p =>
+      p.id === id ? { ...p, status: newStatus } : p
+    ));
+
+    try {
+      const { error } = await supabase
+        .from('payout_requests')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success(`Demande ${newStatus === 'completed' ? 'approuvée' : 'annulée'}`, { id: loadingToast });
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la mise à jour", { id: loadingToast });
+      // En cas d'erreur, on recharge les données pour annuler le changement visuel
+      loadAllData();
+    }
+  };
+
+  const handleUpdateSubscriptionStatus = async (request, newStatus) => {
+    const loadingToast = toast.loading(`Mise à jour de l'abonnement...`);
+
+    try {
+      // 1. Update request status
+      const { error: reqError } = await supabase
+        .from('subscription_requests')
+        .update({ status: newStatus })
+        .eq('id', request.id);
+
+      if (reqError) throw reqError;
+
+      // 2. If approved, update user profile
+      if (newStatus === 'approved') {
+        const expiryDate = new Date();
+        expiryDate.setMonth(expiryDate.getMonth() + 1);
+
+        const { error: profError } = await supabase
+          .from('profiles')
+          .update({
+            is_premium: true,
+            subscription_type: request.type,
+            premium_until: expiryDate.toISOString()
+          })
+          .eq('id', request.user_id);
+
+        if (profError) throw profError;
+      }
+
+      toast.success(`Abonnement ${newStatus === 'approved' ? 'activé' : 'rejeté'} !`, { id: loadingToast });
+      loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la mise à jour", { id: loadingToast });
+    }
+  };
+
+  const exportToCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      toast.error("Aucune donnée à exporter");
+      return;
+    }
+
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        let cell = row[header] === null || row[header] === undefined ? '' : row[header];
+        // Handle objects (like profiles expansion)
+        if (typeof cell === 'object') cell = JSON.stringify(cell).replace(/"/g, '""');
+        // Escape commas and quotes
+        cell = `"${String(cell).replace(/"/g, '""')}"`;
+        return cell;
+      }).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Export CSV terminé");
+  };
+
+  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-[#D4AF37] font-black text-2xl animate-pulse uppercase tracking-tighter">Chargement Admin...</div>;
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 text-center">
+        <Shield className="w-20 h-20 text-red-500 mb-6 opacity-20" />
+        <h1 className="text-2xl font-black text-white uppercase mb-2">Accès Refusé</h1>
+        <p className="text-white/40 mb-8 max-w-xs">Vous devez être administrateur pour accéder à cet espace.</p>
+        <Button asChild className="bg-[#D4AF37] text-black font-bold">
+          <Link to="/">Retour à l'accueil</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col">
@@ -426,41 +638,335 @@ const AdminDashboard = () => {
               <p className="text-white/40 font-bold uppercase text-xs tracking-widest mt-1">Gestion complète de la plateforme</p>
             </div>
           </div>
-          <div className="flex gap-4">
-             <div className="bg-[#111] px-6 py-3 rounded-2xl border border-[#222] text-center">
-                <p className="text-2xl font-black text-[#D4AF37]">{users.length}</p>
-                <p className="text-[10px] text-white/40 uppercase font-bold">Membres</p>
-             </div>
-             <div className="bg-[#111] px-6 py-3 rounded-2xl border border-[#222] text-center">
-                <p className="text-2xl font-black text-[#D4AF37]">{contents.length}</p>
-                <p className="text-[10px] text-white/40 uppercase font-bold">Contenus</p>
+          <div className="flex flex-wrap gap-4 items-center">
+             <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                   <Button variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black font-bold h-12 px-6 rounded-xl transition-all">
+                      <FileSpreadsheet className="w-4 h-4 mr-2" /> Exporter Données
+                   </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-[#111] border-[#222] text-white w-56">
+                   <DropdownMenuItem onClick={() => exportToCSV(users, 'Membres_KLTUR')} className="cursor-pointer">
+                      <Users className="w-4 h-4 mr-2" /> Liste des Membres
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(contents, 'Contenus_KLTUR')} className="cursor-pointer">
+                      <Music className="w-4 h-4 mr-2" /> Liste des Contenus
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(events, 'Events_KLTUR')} className="cursor-pointer">
+                      <Calendar className="w-4 h-4 mr-2" /> Événements
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(news, 'News_KLTUR')} className="cursor-pointer">
+                      <Newspaper className="w-4 h-4 mr-2" /> Actualités
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(radioEpisodes, 'Radio_KLTUR')} className="cursor-pointer">
+                      <Radio className="w-4 h-4 mr-2" /> Épisodes Radio
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(payoutRequests, 'Retraits_KLTUR')} className="cursor-pointer">
+                      <Wallet className="w-4 h-4 mr-2" /> Demandes de Retrait
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(subscriptionRequests, 'Abonnements_KLTUR')} className="cursor-pointer">
+                      <ShieldCheck className="w-4 h-4 mr-2" /> Demandes d'Abonnement
+                   </DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => exportToCSV(users.filter(u => u.is_admin), 'Equipe_KLTUR')} className="cursor-pointer">
+                      <Shield className="w-4 h-4 mr-2" /> Membres de l'Équipe
+                   </DropdownMenuItem>
+                   <DropdownMenuSeparator className="bg-[#222]" />
+                   <DropdownMenuItem onClick={() => {
+                      exportToCSV(users, 'Export_Global_Users');
+                      exportToCSV(contents, 'Export_Global_Content');
+                      exportToCSV(payoutRequests, 'Export_Global_Payouts');
+                      toast.success("Export global lancé (plusieurs fichiers)");
+                   }} className="cursor-pointer font-black text-[#D4AF37]">
+                      <DownloadCloud className="w-4 h-4 mr-2" /> TOUT EXPORTER (ZIP-like)
+                   </DropdownMenuItem>
+                </DropdownMenuContent>
+             </DropdownMenu>
+
+             <div className="flex gap-4">
+                <div className="bg-[#111] px-6 py-3 rounded-2xl border border-[#222] text-center">
+                    <p className="text-2xl font-black text-[#D4AF37]">{users.length}</p>
+                    <p className="text-[10px] text-white/40 uppercase font-bold">Membres</p>
+                </div>
+                <div className="bg-[#111] px-6 py-3 rounded-2xl border border-[#222] text-center">
+                    <p className="text-2xl font-black text-[#D4AF37]">{contents.length}</p>
+                    <p className="text-[10px] text-white/40 uppercase font-bold">Contenus</p>
+                </div>
              </div>
           </div>
         </div>
 
-        <Tabs defaultValue="events" className="w-full">
-          <TabsList className="bg-[#0a0a0a] border border-[#222] p-1 mb-8 w-full justify-start overflow-x-auto overflow-y-hidden no-scrollbar h-auto">
-            <TabsTrigger value="events" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
-              <Calendar className="w-4 h-4 mr-2" /> Événements
+        <Tabs defaultValue="analytics" className="w-full">
+          <TabsList className="bg-[#0a0a0a] border border-[#222] p-1 mb-8 flex flex-wrap h-auto">
+            <TabsTrigger value="analytics" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <BarChart3 className="w-4 h-4 mr-2" /> Analytics
             </TabsTrigger>
-            <TabsTrigger value="radio" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
-              <Radio className="w-4 h-4 mr-2" /> Radio
-            </TabsTrigger>
-            <TabsTrigger value="news" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
+            <TabsTrigger value="news" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
               <Newspaper className="w-4 h-4 mr-2" /> News
             </TabsTrigger>
-            <TabsTrigger value="team" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
-              <UserCircle className="w-4 h-4 mr-2" /> Équipe
+            <TabsTrigger value="events" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <Calendar className="w-4 h-4 mr-2" /> Événements
             </TabsTrigger>
-            <TabsTrigger value="users" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
+            <TabsTrigger value="users" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
               <Users className="w-4 h-4 mr-2" /> Utilisateurs
             </TabsTrigger>
-            <TabsTrigger value="content" className="flex-shrink-0 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4 md:px-8">
+            <TabsTrigger value="content" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
               <Music className="w-4 h-4 mr-2" /> Contenus
+            </TabsTrigger>
+            <TabsTrigger value="radio" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <Radio className="w-4 h-4 mr-2" /> Radio
+            </TabsTrigger>
+            <TabsTrigger value="payouts" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <Wallet className="w-4 h-4 mr-2" /> Retraits
+            </TabsTrigger>
+            <TabsTrigger value="subscriptions" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <ShieldCheck className="w-4 h-4 mr-2" /> Abonnements
+            </TabsTrigger>
+            <TabsTrigger value="team" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <Shield className="w-4 h-4 mr-2" /> Équipe
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex-grow data-[state=active]:bg-[#D4AF37] data-[state=active]:text-black font-bold py-3 px-4">
+              <Settings className="w-4 h-4 mr-2" /> Paramètres
             </TabsTrigger>
           </TabsList>
 
-          {/* EVENTS TAB */}
+          {/* ANALYTICS TAB */}
+          <TabsContent value="analytics" className="space-y-8 outline-none">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                  <CardTitle className="text-sm font-medium text-white/60">Vues Totales</CardTitle>
+                  <Eye className="w-4 h-4 text-[#D4AF37]" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-black">{analytics.totalViews.toLocaleString()}</div>
+                  <p className="text-xs text-green-500 flex items-center mt-1"><TrendingUp className="w-3 h-3 mr-1"/> +12% ce mois</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                  <CardTitle className="text-sm font-medium text-white/60">Téléchargements</CardTitle>
+                  <Download className="w-4 h-4 text-[#D4AF37]" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-black">{analytics.totalDownloads.toLocaleString()}</div>
+                  <p className="text-xs text-green-500 flex items-center mt-1"><TrendingUp className="w-3 h-3 mr-1"/> +5% ce mois</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                  <CardTitle className="text-sm font-medium text-white/60">Engagement (Likes)</CardTitle>
+                  <Heart className="w-4 h-4 text-[#D4AF37]" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-black">{analytics.totalLikes.toLocaleString()}</div>
+                  <p className="text-xs text-white/40 mt-1">Sur tous les contenus</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                  <CardTitle className="text-sm font-medium text-white/60">Revenus Estimés</CardTitle>
+                  <DollarSign className="w-4 h-4 text-[#D4AF37]" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-black">450.000 <span className="text-xs font-bold">CFA</span></div>
+                  <p className="text-xs text-white/40 mt-1">Via Premium & Pubs</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <Card className="lg:col-span-2 bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Croissance de la Plateforme</CardTitle>
+                    <CardDescription className="text-white/40">Utilisateurs vs Contenus</CardDescription>
+                  </div>
+                  <Button onClick={() => exportToCSV(analytics.userGrowth, 'Croissance_Plateforme')} variant="ghost" size="sm" className="text-[#D4AF37] hover:bg-[#D4AF37]/10">
+                    <DownloadCloud className="w-4 h-4 mr-2" /> Rapport CSV
+                  </Button>
+                </CardHeader>
+                <CardContent className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={analytics.userGrowth}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                      <XAxis dataKey="name" stroke="#666" />
+                      <YAxis stroke="#666" />
+                      <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid #333', color: '#fff' }} />
+                      <Line type="monotone" dataKey="users" stroke="#D4AF37" strokeWidth={3} dot={{ r: 6 }} activeDot={{ r: 8 }} />
+                      <Line type="monotone" dataKey="content" stroke="#fff" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader><CardTitle className="text-lg">Distribution Contenu</CardTitle></CardHeader>
+                <CardContent className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={analytics.contentDistribution}
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {analytics.contentDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={index === 0 ? '#D4AF37' : index === 1 ? '#fff' : '#444'} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid #333', color: '#fff' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex flex-col gap-2 mt-4">
+                    {analytics.contentDistribution.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: i === 0 ? '#D4AF37' : i === 1 ? '#fff' : '#444' }} />
+                          <span className="text-white/60">{item.name}</span>
+                        </div>
+                        <span className="font-bold">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* NEWS TAB */}
+          <TabsContent value="news" className="space-y-8 outline-none">
+            <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222]">
+              <h3 className="text-xl font-bold mb-8 flex items-center gap-2 text-[#D4AF37]">
+                {editingNews ? <Edit className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                {editingNews ? "Modifier l'article" : "Publier une actualité"}
+              </h3>
+              <form onSubmit={handleCreateOrUpdateNews} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="md:col-span-2">
+                   <div
+                    onClick={() => document.getElementById('newsImg').click()}
+                    className="w-full h-56 rounded-2xl border-2 border-dashed border-[#333] overflow-hidden bg-[#111] relative group cursor-pointer flex flex-col items-center justify-center text-white/20 hover:border-[#D4AF37]/50 transition-all"
+                   >
+                    {newsImagePreview ? (
+                      <img src={newsImagePreview} className="w-full h-full object-cover" alt="" />
+                    ) : (
+                      <>
+                        <ImageIcon className="w-12 h-12 mb-2" />
+                        <p className="text-sm font-bold uppercase">Image de couverture</p>
+                      </>
+                    )}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <Camera className="w-10 h-10 text-white" />
+                    </div>
+                    <input type="file" id="newsImg" hidden accept="image/*" onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setNewsImage(file);
+                        setNewsImagePreview(URL.createObjectURL(file));
+                      }
+                    }} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Titre</Label>
+                  <Input value={newNews.title} onChange={e => setNewNews({...newNews, title: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Le titre de l'article..." />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Catégorie</Label>
+                  <Select value={newNews.category} onValueChange={(val) => setNewNews({...newNews, category: val})}>
+                    <SelectTrigger className="bg-[#111] border-[#222] h-12">
+                      <SelectValue placeholder="Catégorie" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#111] border-[#222] text-white">
+                      <SelectItem value="News">News</SelectItem>
+                      <SelectItem value="Interview">Interview</SelectItem>
+                      <SelectItem value="Sortie">Nouvelle Sortie</SelectItem>
+                      <SelectItem value="Event">Événement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-white/60 font-bold uppercase text-[10px]">Contenu de l'article</Label>
+                    <span className="text-xs text-white/50">{(newNews.content || "").split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
+                  </div>
+                  <Textarea
+                    value={newNews.content}
+                    onChange={e => setNewNews({...newNews, content: e.target.value})}
+                    className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[300px] resize-none whitespace-pre-wrap"
+                    placeholder="Rédigez votre article ici (Max 1000 mots)..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Lien source (Auto-détection activée)</Label>
+                  <div className="relative">
+                    <Input
+                      value={newNews.source_url}
+                      onChange={e => setNewNews({...newNews, source_url: e.target.value})}
+                      onBlur={e => fetchUrlMetadata(e.target.value)}
+                      className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] pr-10"
+                      placeholder="Collez un lien YouTube ou un article..."
+                    />
+                    {isFetchingMetadata && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[8px] text-white/30 italic">L'app tentera de charger le titre et l'image automatiquement.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white/60 font-bold uppercase text-[10px]">Date de Publication (Planification)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={newNews.published_at}
+                    onChange={e => setNewNews({...newNews, published_at: e.target.value})}
+                    className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] [color-scheme:dark]"
+                  />
+                  <p className="text-[9px] text-[#D4AF37] font-bold">Laissez la date actuelle pour publier immédiatement.</p>
+                </div>
+
+                <div className="md:col-span-2 flex gap-4">
+                  <Button type="submit" disabled={isSubmitting} className="flex-grow bg-[#D4AF37] text-black font-black uppercase h-14 rounded-2xl gold-glow hover:bg-[#b5952f]">
+                    {isSubmitting ? 'Publication...' : (editingNews ? 'Enregistrer les modifications' : 'Publier l\'article')}
+                  </Button>
+                  {editingNews && (
+                    <Button type="button" variant="outline" onClick={() => { setEditingNews(null); setNewNews({ title: '', content: '', category: 'News', source_url: '' }); setNewsImagePreview(null); }} className="border-[#333] text-white px-8 rounded-2xl">Annuler</Button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {news.map(n => (
+                <div key={n.id} className="bg-[#0a0a0a] p-5 rounded-2xl border border-[#222] flex gap-4 group hover:border-[#D4AF37]/30 transition-all">
+                  <img src={getPublicImageUrl('covers', n.image_url)} className="w-24 h-24 rounded-xl object-cover border border-[#222]" alt="" />
+                  <div className="flex-grow min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[8px] font-black uppercase text-[#D4AF37] border border-[#D4AF37]/30 px-2 py-0.5 rounded">{n.category}</span>
+                      {new Date(n.published_at) > new Date() && (
+                        <span className="text-[8px] font-black uppercase text-blue-400 border border-blue-400/30 px-2 py-0.5 rounded bg-blue-400/5">Programmé</span>
+                      )}
+                    </div>
+                    <h4 className="font-black text-white truncate">{n.title}</h4>
+                    <p className="text-[10px] text-white/40 mt-1">
+                      {new Date(n.published_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+                    </p>
+                    <div className="flex gap-2 mt-4">
+                      <Button variant="ghost" onClick={() => startEditNews(n)} className="h-8 w-8 p-0 text-white/40 hover:text-white"><Edit className="w-4 h-4"/></Button>
+                      <Button variant="ghost" onClick={() => handleDeleteNews(n.id)} className="h-8 w-8 p-0 text-red-500/40 hover:text-red-500"><Trash2 className="w-4 h-4"/></Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
           <TabsContent value="events" className="space-y-8 outline-none">
             {/* Form */}
             <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222] relative">
@@ -543,8 +1049,8 @@ const AdminDashboard = () => {
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={ev.id} className="bg-[#0a0a0a] p-6 rounded-3xl border border-[#222] flex flex-col md:flex-row items-center justify-between gap-6 hover:border-[#D4AF37]/30 transition-all group">
                   <div className="flex items-center gap-6 w-full">
                     <div className="h-20 w-20 rounded-2xl overflow-hidden bg-[#111] shrink-0 border border-[#333]">
-                      {(ev.image || ev.image_url) ? (
-                        <img src={getPublicImageUrl('covers', ev.image || ev.image_url)} className="h-full w-full object-cover" alt="" />
+                      {ev.image ? (
+                        <img src={getPublicImageUrl('covers', ev.image)} className="h-full w-full object-cover" alt="" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center text-white/10"><Calendar className="w-8 h-8" /></div>
                       )}
@@ -571,272 +1077,6 @@ const AdminDashboard = () => {
             </div>
           </TabsContent>
 
-          {/* RADIO TAB */}
-          <TabsContent value="radio" className="space-y-8 outline-none">
-             <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222]">
-              <h3 className="text-xl font-bold mb-8 flex items-center gap-2 text-[#D4AF37]">
-                <Radio className="w-5 h-5" />
-                {editingEpisode ? "Modifier l'épisode radio" : "Ajouter un nouvel épisode"}
-              </h3>
-
-              <form onSubmit={handleCreateOrUpdateEpisode} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Titre de l'épisode</Label>
-                  <Input value={newEpisode.title} onChange={e => setNewEpisode({...newEpisode, title: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: Épisode 12 : Spécial Makassy" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Date de diffusion</Label>
-                  <Input type="date" value={newEpisode.date} onChange={e => setNewEpisode({...newEpisode, date: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] [color-scheme:dark]" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Durée</Label>
-                  <Input value={newEpisode.duration} onChange={e => setNewEpisode({...newEpisode, duration: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: 60:00" />
-                </div>
-
-                <div className="space-y-4">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Source de l'audio</Label>
-                  <div className="flex gap-4 p-1 bg-[#111] border border-[#222] rounded-xl h-12">
-                    <button
-                      type="button"
-                      onClick={() => setAudioSourceType('link')}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all ${audioSourceType === 'link' ? 'bg-[#D4AF37] text-black' : 'text-white/40 hover:text-white'}`}
-                    >
-                      <LinkIcon className="w-3.5 h-3.5" /> Lien Externe
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAudioSourceType('file')}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all ${audioSourceType === 'file' ? 'bg-[#D4AF37] text-black' : 'text-white/40 hover:text-white'}`}
-                    >
-                      <FileAudio className="w-3.5 h-3.5" /> Fichier Audio
-                    </button>
-                  </div>
-
-                  {audioSourceType === 'link' ? (
-                    <Input
-                      value={newEpisode.audio_url}
-                      onChange={e => setNewEpisode({...newEpisode, audio_url: e.target.value})}
-                      className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]"
-                      placeholder="https://... (ex: SoundCloud, MP3 direct)"
-                    />
-                  ) : (
-                    <div className="relative h-12">
-                      <input
-                        type="file"
-                        accept="audio/*"
-                        onChange={e => setAudioFile(e.target.files[0])}
-                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                      />
-                      <div className="h-full border border-[#222] bg-[#111] rounded-xl flex items-center px-4 text-xs font-bold text-white/60">
-                        {audioFile ? audioFile.name : "Sélectionner un fichier MP3..."}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="md:col-span-2 space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Description / Résumé</Label>
-                  <Textarea value={newEpisode.description} onChange={e => setNewEpisode({...newEpisode, description: e.target.value})} className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[100px] resize-none" placeholder="De quoi parle cet épisode ?" />
-                </div>
-
-                <div className="md:col-span-2 flex gap-4">
-                  <Button type="submit" disabled={isSubmitting} className="flex-grow bg-[#D4AF37] text-black font-black uppercase h-14 rounded-2xl gold-glow hover:bg-[#b5952f]">
-                    {isSubmitting ? 'Enregistrement...' : (editingEpisode ? 'Mettre à jour' : 'Publier l\'épisode')}
-                  </Button>
-                  {editingEpisode && (
-                    <Button type="button" variant="outline" onClick={() => { setEditingEpisode(null); setNewEpisode({ title: '', date: '', duration: '', description: '', audio_url: '' }); }} className="border-[#333] text-white px-8 rounded-2xl hover:bg-red-500 transition-all">
-                      Annuler
-                    </Button>
-                  )}
-                </div>
-              </form>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-              <h4 className="text-sm font-black uppercase tracking-[0.2em] text-[#D4AF37]">Archives Radio</h4>
-              {radioEpisodes.length === 0 ? (
-                <div className="text-center py-20 bg-[#0a0a0a] rounded-3xl border border-[#222] text-white/20">Aucun épisode archivé</div>
-              ) : radioEpisodes.map(ep => (
-                <div key={ep.id} className="bg-[#0a0a0a] p-6 rounded-3xl border border-[#222] flex items-center justify-between gap-6 hover:border-[#D4AF37]/30 transition-all">
-                  <div className="flex items-center gap-6">
-                    <div className="h-14 w-14 rounded-xl bg-[#111] flex items-center justify-center text-[#D4AF37] border border-[#222]">
-                      <Radio className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="font-black text-white">{ep.title}</h4>
-                      <p className="text-xs text-white/40 font-bold uppercase tracking-wider">{new Date(ep.date).toLocaleDateString('fr-FR')} • {ep.duration}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={() => startEditEpisode(ep)} className="border-[#333] text-white hover:border-[#D4AF37] rounded-xl h-10 w-10 p-0">
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" onClick={() => handleDeleteEpisode(ep.id)} className="border-[#333] text-red-500 hover:bg-red-500/10 rounded-xl h-10 w-10 p-0">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* NEWS TAB */}
-          <TabsContent value="news" className="space-y-8 outline-none">
-             <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222]">
-              <h3 className="text-xl font-bold mb-8 flex items-center gap-2 text-[#D4AF37]">
-                <Newspaper className="w-5 h-5" />
-                {editingNews ? "Modifier l'article" : "Publier une actualité"}
-              </h3>
-
-              <form onSubmit={handleCreateOrUpdateNews} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="md:col-span-2 space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Titre de l'actualité</Label>
-                  <Input value={newNews.title} onChange={e => setNewNews({...newNews, title: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: Sortie de l'album de..." />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Catégorie</Label>
-                  <Select value={newNews.category} onValueChange={v => setNewNews({...newNews, category: v})}>
-                    <SelectTrigger className="bg-[#111] border-[#222] h-12 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#111] border-[#222] text-white">
-                      <SelectItem value="News">News</SelectItem>
-                      <SelectItem value="Interviews">Interviews</SelectItem>
-                      <SelectItem value="Ateliers">Ateliers</SelectItem>
-                      <SelectItem value="Chroniques">Chroniques</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">URL de l'image</Label>
-                  <Input value={newNews.image_url} onChange={e => setNewNews({...newNews, image_url: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://images.unsplash.com/..." />
-                </div>
-
-                <div className="md:col-span-2 space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Extrait (Court résumé)</Label>
-                  <Input value={newNews.excerpt} onChange={e => setNewNews({...newNews, excerpt: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Quelques mots pour attirer l'attention..." />
-                </div>
-
-                <div className="md:col-span-2 space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Contenu de l'article</Label>
-                  <Textarea value={newNews.content} onChange={e => setNewNews({...newNews, content: e.target.value})} className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[200px] resize-none" placeholder="Rédigez votre article ici..." />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Lien source (Optionnel)</Label>
-                  <Input value={newNews.source_url} onChange={e => setNewNews({...newNews, source_url: e.target.value})} className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Lien vers article original..." />
-                </div>
-
-                <div className="md:col-span-2 flex gap-4">
-                  <Button type="submit" disabled={isSubmitting} className="flex-grow bg-[#D4AF37] text-black font-black uppercase h-14 rounded-2xl gold-glow hover:bg-[#b5952f]">
-                    {isSubmitting ? 'Enregistrement...' : (editingNews ? 'Enregistrer les modifications' : 'Publier l\'article')}
-                  </Button>
-                  {editingNews && (
-                    <Button type="button" variant="outline" onClick={() => { setEditingNews(null); setNewNews({ title: '', category: 'News', excerpt: '', content: '', image_url: '', source_url: '' }); }} className="border-[#333] text-white px-8 rounded-2xl hover:bg-red-500 transition-all">
-                      Annuler
-                    </Button>
-                  )}
-                </div>
-              </form>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {news.length === 0 ? (
-                <div className="md:col-span-2 text-center py-20 bg-[#0a0a0a] rounded-3xl border border-[#222] text-white/20">Aucun article publié</div>
-              ) : news.map(n => (
-                <div key={n.id} className="bg-[#0a0a0a] p-5 rounded-3xl border border-[#222] flex gap-5 hover:border-[#D4AF37]/30 transition-all group">
-                   <div className="h-24 w-24 rounded-2xl overflow-hidden shrink-0 border border-[#333]">
-                      <img src={n.image_url || 'https://via.placeholder.com/150'} className="h-full w-full object-cover" alt="" />
-                   </div>
-                   <div className="flex-grow min-w-0">
-                      <span className="text-[10px] font-black uppercase text-[#D4AF37] mb-1 inline-block">{n.category}</span>
-                      <h4 className="font-bold text-white truncate text-lg mb-2">{n.title}</h4>
-                      <div className="flex items-center gap-3">
-                        <Button variant="outline" size="sm" onClick={() => startEditNews(n)} className="h-8 border-[#222] text-xs font-bold text-white hover:border-[#D4AF37]">
-                          <Edit className="w-3 h-3 mr-1" /> Modifier
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDeleteNews(n.id)} className="h-8 border-[#222] text-xs font-bold text-red-500 hover:bg-red-500/10">
-                          <Trash2 className="w-3 h-3 mr-1" />
-                        </Button>
-                      </div>
-                   </div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* TEAM TAB */}
-          <TabsContent value="team" className="space-y-8 outline-none">
-            <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222]">
-              <h3 className="text-xl font-bold mb-8 flex items-center gap-2 text-[#D4AF37]">
-                <UserCircle className="w-5 h-5" />
-                {editingMember ? "Modifier le membre" : "Ajouter un membre à l'équipe"}
-              </h3>
-
-              <form onSubmit={handleCreateOrUpdateMember} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Nom complet</Label>
-                  <Input value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: Jonathan Mambachaka" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Rôle / Poste</Label>
-                  <Input value={newMember.role} onChange={e => setNewMember({...newMember, role: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="Ex: CEO & Fondateur" />
-                </div>
-
-                <div className="md:col-span-2 space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">URL de la photo</Label>
-                  <Input value={newMember.image_url} onChange={e => setNewMember({...newMember, image_url: e.target.value})} required className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://..." />
-                </div>
-
-                <div className="md:col-span-2 space-y-2">
-                  <Label className="text-white/60 font-bold uppercase text-[10px]">Biographie courte</Label>
-                  <Textarea value={newMember.bio} onChange={e => setNewMember({...newMember, bio: e.target.value})} className="bg-[#111] border-[#222] focus:border-[#D4AF37] min-h-[100px] resize-none" placeholder="Description du membre..." />
-                </div>
-
-                <div className="md:col-span-2 flex gap-4">
-                  <Button type="submit" disabled={isSubmitting} className="flex-grow bg-[#D4AF37] text-black font-black uppercase h-14 rounded-2xl gold-glow hover:bg-[#b5952f]">
-                    {isSubmitting ? 'Enregistrement...' : (editingMember ? 'Mettre à jour' : 'Ajouter à l\'équipe')}
-                  </Button>
-                  {editingMember && (
-                    <Button type="button" variant="outline" onClick={() => { setEditingMember(null); setNewMember({ name: '', role: '', bio: '', image_url: '' }); }} className="border-[#333] text-white px-8 rounded-2xl hover:bg-red-500 transition-all">
-                      Annuler
-                    </Button>
-                  )}
-                </div>
-              </form>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teamMembers.length === 0 ? (
-                <div className="md:col-span-3 text-center py-20 bg-[#0a0a0a] rounded-3xl border border-[#222] text-white/20">Aucun membre enregistré</div>
-              ) : teamMembers.map(m => (
-                <div key={m.id} className="bg-[#0a0a0a] p-5 rounded-3xl border border-[#222] flex flex-col hover:border-[#D4AF37]/30 transition-all group">
-                   <div className="h-48 w-full rounded-2xl overflow-hidden border border-[#333] mb-4">
-                      <img src={m.image_url || 'https://via.placeholder.com/300'} className="h-full w-full object-cover filter grayscale group-hover:grayscale-0 transition-all" alt="" />
-                   </div>
-                   <div className="flex-grow">
-                      <h4 className="font-bold text-white text-lg">{m.name}</h4>
-                      <p className="text-[#D4AF37] text-xs font-black uppercase tracking-widest mb-3">{m.role}</p>
-                      <p className="text-white/50 text-sm line-clamp-3 mb-4">{m.bio}</p>
-                      <div className="flex items-center gap-2 pt-4 border-t border-[#222]">
-                        <Button variant="outline" size="sm" onClick={() => startEditMember(m)} className="flex-1 h-10 border-[#222] text-xs font-bold text-white hover:border-[#D4AF37]">
-                          <Edit className="w-3.5 h-3.5 mr-1" /> Modifier
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDeleteMember(m.id)} className="h-10 w-10 border-[#222] text-red-500 hover:bg-red-500/10">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                   </div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
           {/* USERS TAB */}
           <TabsContent value="users" className="outline-none">
             <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] overflow-hidden">
@@ -857,7 +1097,9 @@ const AdminDashboard = () => {
                           <div className="flex items-center gap-4">
                             <Avatar className="h-12 w-12 border-2 border-[#222] group-hover:border-[#D4AF37]/30 transition-all">
                               <AvatarImage src={getPublicImageUrl('avatars', u.avatar || u.profilePhoto)} />
-                              <AvatarFallback className="bg-[#111] text-[#D4AF37] font-black">{u.username?.charAt(0) || u.email?.charAt(0)}</AvatarFallback>
+                              <AvatarFallback className="bg-[#111] text-[#D4AF37] font-black">
+                                {(u.username || u.email || "U").charAt(0).toUpperCase()}
+                              </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
                               <p className="font-black text-white flex items-center gap-1.5">
@@ -870,19 +1112,57 @@ const AdminDashboard = () => {
                         </td>
                         <td className="px-8 py-5">
                           <span className="text-[10px] font-black uppercase text-[#D4AF37] border border-[#D4AF37]/30 px-2 py-1 rounded bg-[#D4AF37]/5">{u.user_role || 'Membre'}</span>
+                          {u.premium_until && (
+                            <p className="text-[9px] text-white/30 mt-1 font-bold">
+                              Expire le : {new Date(u.premium_until).toLocaleDateString()}
+                            </p>
+                          )}
                           {u.phone && <p className="text-[10px] text-white/40 mt-1.5 font-bold uppercase">{u.phone}</p>}
                         </td>
                         <td className="px-8 py-5 text-sm text-white/60 font-medium">
                           {u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : 'Inconnue'}
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <Button
-                            size="sm" variant="outline"
-                            onClick={() => toggleUserPremium(u.id, u.is_premium)}
-                            className={`rounded-xl font-bold text-[10px] uppercase h-10 ${u.is_premium ? "border-red-500/20 text-red-400 hover:bg-red-500/10" : "border-[#D4AF37]/20 text-[#D4AF37] hover:bg-[#D4AF37]/10"}`}
-                          >
-                            {u.is_premium ? 'Retirer Certif.' : 'Certifier Membre'}
-                          </Button>
+                          {u.is_premium ? (
+                            <Button
+                              size="sm" variant="outline"
+                              onClick={() => toggleUserPremium(u.id, u.is_premium)}
+                              className="rounded-xl font-bold text-[10px] uppercase h-10 border-red-500/20 text-red-400 hover:bg-red-500/10"
+                            >
+                              Retirer Certif.
+                            </Button>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="bg-[#D4AF37] text-black font-bold text-[10px] uppercase h-10 rounded-xl hover:bg-[#b5952f]"
+                                >
+                                  Certifier Membre <ChevronDown className="ml-2 w-3 h-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-[#111] border-[#222] text-white w-48">
+                                <DropdownMenuItem
+                                  onClick={() => activateUserSubscription(u.id, 'auditor')}
+                                  className="cursor-pointer focus:bg-blue-500/20 focus:text-blue-400"
+                                >
+                                  <ShieldCheck className="w-4 h-4 mr-2 text-blue-400" /> Auditeur Premium
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => activateUserSubscription(u.id, 'artist')}
+                                  className="cursor-pointer focus:bg-[#D4AF37]/20 focus:text-[#D4AF37]"
+                                >
+                                  <Award className="w-4 h-4 mr-2 text-[#D4AF37]" /> Artiste Standard
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => activateUserSubscription(u.id, 'artist_premium')}
+                                  className="cursor-pointer focus:bg-[#D4AF37]/30 focus:text-[#D4AF37] font-bold"
+                                >
+                                  <Trophy className="w-4 h-4 mr-2 text-[#D4AF37]" /> Artiste Premium
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -896,12 +1176,10 @@ const AdminDashboard = () => {
           <TabsContent value="content" className="outline-none">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {contents.map(c => (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={`${c.contentType}-${c.id}`} className="bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden group hover:border-[#D4AF37]/30 transition-all">
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={`${c.type}-${c.id}`} className="bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden group hover:border-[#D4AF37]/30 transition-all">
                   <div className="aspect-video relative overflow-hidden bg-[#111]">
-                    <img src={getPublicImageUrl(c.contentType === 'Upload' ? 'covers' : 'posts', c.cover_art || c.content_url)} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" alt="" />
-                    <div className="absolute top-2 left-2 bg-black/80 backdrop-blur text-[8px] font-black uppercase px-2 py-1 rounded border border-white/10 tracking-widest">
-                      {c.contentType === 'Upload' ? (c.type || 'MUSIQUE') : 'POST'}
-                    </div>
+                    <img src={getPublicImageUrl(c.type === 'Musique' ? 'covers' : 'posts', c.cover_art || c.content_url)} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" alt="" />
+                    <div className="absolute top-2 left-2 bg-black/80 backdrop-blur text-[8px] font-black uppercase px-2 py-1 rounded border border-white/10 tracking-widest">{c.type}</div>
                   </div>
                   <div className="p-5">
                     <h4 className="font-black text-sm truncate text-white mb-1">{c.title}</h4>
@@ -924,15 +1202,440 @@ const AdminDashboard = () => {
 
                     <div className="flex gap-2">
                        <Button asChild size="sm" variant="ghost" className="flex-grow text-[10px] font-black uppercase text-white/60 hover:text-[#D4AF37] hover:bg-transparent">
-                          <Link to={c.contentType === 'Upload' ? `/uploads/${c.id}` : `/posts/${c.id}`}>Ouvrir <ChevronRight className="w-3 h-3 ml-1"/></Link>
+                          <Link to={c.type === 'Musique' ? `/uploads/${c.id}` : `/posts/${c.id}`}>Ouvrir <ChevronRight className="w-3 h-3 ml-1"/></Link>
                        </Button>
-                       <Button size="sm" variant="ghost" onClick={() => deleteContent(c.id, c.contentType)} className="text-red-500 hover:bg-red-500/10 rounded-lg h-9 w-9 p-0">
+                       <Button size="sm" variant="ghost" onClick={() => deleteContent(c.id, c.type)} className="text-red-500 hover:bg-red-500/10 rounded-lg h-9 w-9 p-0">
                           <Trash2 className="w-4 h-4" />
                        </Button>
                     </div>
                   </div>
                 </motion.div>
               ))}
+            </div>
+          </TabsContent>
+
+          {/* RADIO TAB */}
+          <TabsContent value="radio" className="space-y-8 outline-none">
+             <div className="bg-[#0a0a0a] p-8 rounded-3xl border border-[#222]">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-500">
+                    <Radio className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Gestion Radio KLTUR RAP</h3>
+                    <p className="text-xs text-white/40 font-medium">Planifiez les émissions et gérez les fichiers audio.</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleCreateRadioEpisode} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                   <div className="space-y-6">
+                      <div className="space-y-2">
+                        <Label className="text-white font-bold text-xs uppercase tracking-widest">Titre de l'émission</Label>
+                        <Input
+                          value={newRadio.title}
+                          onChange={e => setNewRadio({...newRadio, title: e.target.value})}
+                          className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]"
+                          placeholder="Ex: Voix Urbaines #12"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-4 pt-2">
+                        <Label className="text-white font-bold text-xs uppercase tracking-widest">Source Audio</Label>
+                        <div className="flex gap-4">
+                           <Button
+                             type="button"
+                             onClick={() => setNewRadio({...newRadio, is_external: false})}
+                             className={`flex-grow h-12 rounded-xl font-bold ${!newRadio.is_external ? 'bg-[#D4AF37] text-black' : 'bg-[#111] text-white/40 border border-[#222]'}`}
+                           >
+                             Fichier Audio
+                           </Button>
+                           <Button
+                             type="button"
+                             onClick={() => setNewRadio({...newRadio, is_external: true})}
+                             className={`flex-grow h-12 rounded-xl font-bold ${newRadio.is_external ? 'bg-[#D4AF37] text-black' : 'bg-[#111] text-white/40 border border-[#222]'}`}
+                           >
+                             Lien URL (YouTube...)
+                           </Button>
+                        </div>
+                      </div>
+
+                      {newRadio.is_external ? (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                          <Label className="text-white font-bold text-xs uppercase tracking-widest">Lien Externe</Label>
+                          <Input
+                            value={newRadio.external_url}
+                            onChange={e => setNewRadio({...newRadio, external_url: e.target.value})}
+                            className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]"
+                            placeholder="https://youtube.com/watch?v=..."
+                            required
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                          <Label className="text-white font-bold text-xs uppercase tracking-widest">Fichier MP3 / WAV</Label>
+                          <div
+                            onClick={() => document.getElementById('radioAudio').click()}
+                            className="w-full h-12 bg-[#111] border border-[#222] rounded-xl flex items-center px-4 cursor-pointer hover:border-[#D4AF37]/50 transition-all text-white/50 overflow-hidden"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            <span className="truncate">{radioFile ? radioFile.name : 'Choisir un fichier...'}</span>
+                          </div>
+                          <input type="file" id="radioAudio" hidden accept="audio/*" onChange={(e) => setRadioFile(e.target.files[0])} />
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <Label className="text-white font-bold text-xs uppercase tracking-widest">Date de l'émission</Label>
+                        <Input
+                          type="datetime-local"
+                          value={newRadio.date}
+                          onChange={e => setNewRadio({...newRadio, date: e.target.value})}
+                          className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37] [color-scheme:dark]"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-white font-bold text-xs uppercase tracking-widest">Description</Label>
+                        <Textarea
+                          value={newRadio.description}
+                          onChange={e => setNewRadio({...newRadio, description: e.target.value})}
+                          className="bg-[#111] border-[#222] min-h-[100px] resize-none focus:border-[#D4AF37]"
+                          placeholder="Résumé de l'émission..."
+                        />
+                      </div>
+
+                      <Button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full bg-purple-600 hover:bg-purple-700 font-bold uppercase py-6 rounded-xl shadow-lg"
+                      >
+                        {isSubmitting ? 'Envoi en cours...' : 'Ajouter à la Radio'}
+                      </Button>
+                   </div>
+
+                   <div className="bg-[#111] p-6 rounded-2xl border border-[#222] flex flex-col items-center justify-center text-center">
+                      <Trophy className="w-12 h-12 text-[#D4AF37] mb-4" />
+                      <h4 className="font-bold text-white mb-2">Statistiques Radio</h4>
+                      <p className="text-sm text-white/40 mb-6">Suivez l'audience en temps réel de vos émissions.</p>
+                      <div className="grid grid-cols-2 gap-4 w-full">
+                         <div className="bg-black/40 p-4 rounded-xl">
+                            <p className="text-xl font-black text-[#D4AF37]">1.2k</p>
+                            <p className="text-[10px] uppercase font-bold text-white/20">Auditeurs</p>
+                         </div>
+                         <div className="bg-black/40 p-4 rounded-xl">
+                            <p className="text-xl font-black text-[#D4AF37]">85%</p>
+                            <p className="text-[10px] uppercase font-bold text-white/20">Fidélité</p>
+                         </div>
+                      </div>
+                      <div className="mt-8 w-full">
+                         <p className="text-[10px] font-black uppercase text-white/30 mb-4 tracking-[0.2em]">Historique des diffusions</p>
+                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {radioEpisodes.length === 0 ? (
+                              <p className="text-[10px] text-white/20 italic">Aucun historique</p>
+                            ) : radioEpisodes.map(ep => (
+                              <div key={ep.id} className="bg-black/40 p-3 rounded-lg border border-white/5 flex justify-between items-center text-left group">
+                                 <div className="min-w-0">
+                                    <span className="text-xs font-bold text-white truncate block">{ep.title}</span>
+                                    <span className="text-[9px] text-white/20 uppercase font-black">{new Date(ep.created_at).toLocaleDateString()}</span>
+                                 </div>
+                                 <Button
+                                   variant="ghost"
+                                   onClick={() => handleDeleteRadioEpisode(ep.id)}
+                                   className="h-8 w-8 p-0 text-white/10 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                 >
+                                    <Trash2 className="w-4 h-4" />
+                                 </Button>
+                              </div>
+                            ))}
+                         </div>
+                      </div>
+                   </div>
+                </form>
+             </div>
+          </TabsContent>
+
+          {/* PAYOUTS TAB */}
+          <TabsContent value="payouts" className="outline-none">
+             <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] overflow-hidden">
+                <div className="p-8 border-b border-[#222] flex justify-between items-center">
+                   <div>
+                      <h3 className="text-xl font-bold text-white uppercase tracking-tight">Demandes de Retrait</h3>
+                      <p className="text-sm text-white/40">Gérez les paiements Orange Money en attente.</p>
+                   </div>
+                   <div className="bg-[#111] px-6 py-3 rounded-2xl border border-[#222]">
+                      <p className="text-xl font-black text-[#D4AF37]">
+                        {payoutRequests.filter(r => r.status === 'pending').reduce((acc, r) => acc + r.amount, 0).toLocaleString()} <span className="text-[10px] uppercase">CFA</span>
+                      </p>
+                      <p className="text-[10px] text-white/40 uppercase font-bold">Total en attente</p>
+                   </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                   <table className="w-full text-left">
+                      <thead className="bg-[#111] text-[10px] font-black uppercase tracking-widest text-white/40 border-b border-[#222]">
+                         <tr>
+                            <th className="px-8 py-6">Artiste</th>
+                            <th className="px-8 py-6">Montant</th>
+                            <th className="px-8 py-6">Détails Compte OM</th>
+                            <th className="px-8 py-6">Statut</th>
+                            <th className="px-8 py-6 text-right">Actions</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#222]">
+                         {payoutRequests.length === 0 ? (
+                            <tr>
+                               <td colSpan="5" className="px-8 py-20 text-center text-white/20 italic">Aucune demande de retrait enregistrée.</td>
+                            </tr>
+                         ) : payoutRequests.map(p => (
+                            <tr key={p.id} className="hover:bg-white/5 transition-colors group">
+                               <td className="px-8 py-5">
+                                  <div className="flex items-center gap-4">
+                                     <Avatar className="h-10 w-10 border border-[#222]">
+                                        <AvatarImage src={getPublicImageUrl('avatars', p.profiles?.avatar)} />
+                                        <AvatarFallback className="bg-black text-[#D4AF37] font-black">{p.profiles?.username?.charAt(0)}</AvatarFallback>
+                                     </Avatar>
+                                     <div className="min-w-0">
+                                        <p className="font-bold text-white truncate">@{p.profiles?.username}</p>
+                                        <p className="text-[10px] text-white/40 truncate">{p.profiles?.email}</p>
+                                     </div>
+                                  </div>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <span className="text-lg font-black text-[#D4AF37]">{p.amount.toLocaleString()} FCFA</span>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <div className="flex flex-col gap-1">
+                                     <div className="flex items-center gap-2">
+                                        <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" className="w-4 h-4" alt="Orange" />
+                                        <span className="font-bold text-white/80">{p.phone_number}</span>
+                                     </div>
+                                     <p className="text-[10px] text-[#D4AF37] font-black uppercase tracking-wider">{p.account_name || 'Nom non fourni'}</p>
+                                  </div>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <span className={`text-[9px] font-black uppercase px-2 py-1 rounded ${
+                                     p.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
+                                     p.status === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                     'bg-red-500/10 text-red-500 border border-red-500/20'
+                                  }`}>
+                                     {p.status === 'pending' ? 'En attente' : p.status === 'completed' ? 'Payé' : 'Annulé'}
+                                  </span>
+                               </td>
+                               <td className="px-8 py-5 text-right">
+                                  {p.status === 'pending' && (
+                                     <div className="flex justify-end gap-2">
+                                        <Button
+                                          onClick={() => handleUpdatePayoutStatus(p.id, 'completed')}
+                                          className="bg-green-600 hover:bg-green-700 text-white font-bold h-9 px-4 rounded-xl text-[10px] uppercase"
+                                        >
+                                          Valider Paiement
+                                        </Button>
+                                        <Button
+                                          onClick={() => handleUpdatePayoutStatus(p.id, 'cancelled')}
+                                          variant="ghost"
+                                          className="text-red-500 hover:bg-red-500/10 font-bold h-9 px-4 rounded-xl text-[10px] uppercase"
+                                        >
+                                          Annuler
+                                        </Button>
+                                     </div>
+                                  )}
+                               </td>
+                            </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+          </TabsContent>
+
+          {/* SUBSCRIPTIONS TAB */}
+          <TabsContent value="subscriptions" className="outline-none">
+             <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] overflow-hidden">
+                <div className="p-8 border-b border-[#222]">
+                   <h3 className="text-xl font-bold text-white uppercase tracking-tight">Demandes d'Abonnement</h3>
+                   <p className="text-sm text-white/40">Validez les paiements reçus via Orange Money ou WhatsApp.</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                   <table className="w-full text-left">
+                      <thead className="bg-[#111] text-[10px] font-black uppercase tracking-widest text-white/40 border-b border-[#222]">
+                         <tr>
+                            <th className="px-8 py-6">Utilisateur</th>
+                            <th className="px-8 py-6">Offre</th>
+                            <th className="px-8 py-6">Montant</th>
+                            <th className="px-8 py-6">Date</th>
+                            <th className="px-8 py-6 text-right">Action</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#222]">
+                         {subscriptionRequests.length === 0 ? (
+                            <tr>
+                               <td colSpan="5" className="px-8 py-20 text-center text-white/20 italic">Aucune demande en attente.</td>
+                            </tr>
+                         ) : subscriptionRequests.map(s => (
+                            <tr key={s.id} className="hover:bg-white/5 transition-colors group">
+                               <td className="px-8 py-5">
+                                  <div className="flex items-center gap-4">
+                                     <Avatar className="h-10 w-10 border border-[#222]">
+                                        <AvatarImage src={getPublicImageUrl('avatars', s.profiles?.avatar)} />
+                                        <AvatarFallback className="bg-black text-[#D4AF37] font-black">{s.profiles?.username?.charAt(0)}</AvatarFallback>
+                                     </Avatar>
+                                     <div className="min-w-0">
+                                        <p className="font-bold text-white truncate">@{s.profiles?.username}</p>
+                                        <p className="text-[10px] text-white/40 truncate">{s.profiles?.email}</p>
+                                     </div>
+                                  </div>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <span className={`text-[10px] font-black uppercase px-2 py-1 rounded ${s.type === 'artist' ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'bg-blue-500/10 text-blue-400'}`}>
+                                     {s.type === 'artist' ? 'Artiste Certifié' : 'Auditeur Premium'}
+                                  </span>
+                               </td>
+                               <td className="px-8 py-5">
+                                  <span className="font-black text-white">{s.amount.toLocaleString()} FCFA</span>
+                               </td>
+                               <td className="px-8 py-5 text-sm text-white/40">
+                                  {new Date(s.created_at).toLocaleDateString()}
+                               </td>
+                               <td className="px-8 py-5 text-right">
+                                  {s.status === 'pending' ? (
+                                     <div className="flex justify-end gap-2">
+                                        <Button
+                                          onClick={() => handleUpdateSubscriptionStatus(s, 'approved')}
+                                          className="bg-green-600 hover:bg-green-700 text-white font-bold h-9 px-4 rounded-xl text-[10px] uppercase"
+                                        >
+                                          Approuver
+                                        </Button>
+                                        <Button
+                                          onClick={() => handleUpdateSubscriptionStatus(s, 'rejected')}
+                                          variant="ghost"
+                                          className="text-red-500 hover:bg-red-500/10 font-bold h-9 px-4 rounded-xl text-[10px] uppercase"
+                                        >
+                                          Rejeter
+                                        </Button>
+                                     </div>
+                                  ) : (
+                                     <span className={`text-[10px] font-black uppercase ${s.status === 'approved' ? 'text-green-500' : 'text-red-500'}`}>
+                                        {s.status === 'approved' ? 'Validé' : 'Refusé'}
+                                     </span>
+                                  )}
+                               </td>
+                            </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+          </TabsContent>
+
+          {/* TEAM TAB */}
+          <TabsContent value="team" className="outline-none">
+             <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] overflow-hidden">
+                <div className="p-8 border-b border-[#222] flex flex-col md:flex-row justify-between items-center gap-4">
+                   <div>
+                      <h3 className="text-xl font-bold text-white">Gestion de l'Équipe</h3>
+                      <p className="text-sm text-white/40">Attribuez des rôles administratifs et gérez les membres du staff.</p>
+                   </div>
+                   <div className="flex gap-4">
+                      <Button variant="outline" className="border-[#333] text-white font-bold" onClick={loadAllData}>
+                         Rafraîchir
+                      </Button>
+                      <Button
+                        onClick={() => document.getElementById('promotion-section')?.scrollIntoView({ behavior: 'smooth' })}
+                        className="bg-white text-black hover:bg-white/90 font-bold"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> Recruter Nouveau Staff
+                      </Button>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-8">
+                   {users.filter(u => u.is_admin).map(admin => (
+                      <div key={admin.id} className="bg-[#111] p-6 rounded-2xl border border-[#222] flex items-center gap-4 group hover:border-[#D4AF37]/50 transition-all">
+                         <Avatar className="h-16 w-14 border border-[#333]">
+                            <AvatarImage src={getPublicImageUrl('avatars', admin.avatar || admin.profilePhoto)} />
+                            <AvatarFallback className="bg-black text-[#D4AF37] font-black">
+                               {(admin.username || "A").charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                         </Avatar>
+                         <div className="flex-grow min-w-0">
+                            <h4 className="font-black text-white truncate">{admin.username || admin.name}</h4>
+                            <p className="text-[10px] text-[#D4AF37] font-bold uppercase tracking-widest">{admin.user_role || 'Administrateur'}</p>
+                            <div className="flex gap-2 mt-3">
+                               <Button variant="ghost" className="h-7 px-2 text-[8px] font-black uppercase text-white/40 hover:text-white border border-white/5">Paramètres</Button>
+                               <Button
+                                 variant="ghost"
+                                 onClick={() => toggleUserAdmin(admin.id, true)}
+                                 className="h-7 px-2 text-[8px] font-black uppercase text-red-500/40 hover:text-red-500 border border-red-500/5"
+                               >
+                                 Retirer Admin
+                               </Button>
+                            </div>
+                         </div>
+                      </div>
+                   ))}
+                </div>
+
+                <div id="promotion-section" className="p-8 bg-[#111]/30 border-t border-[#222]">
+                   <h4 className="text-xs font-black uppercase tracking-widest text-white/40 mb-4">Promouvoir un membre dans l'équipe</h4>
+                   <div className="flex flex-wrap gap-4">
+                      {users.filter(u => !u.is_admin).slice(0, 10).map(suggest => (
+                         <div key={suggest.id} className="flex items-center gap-2 bg-black/40 px-3 py-2 rounded-full border border-white/5 group hover:border-[#D4AF37]/30 transition-all">
+                            <Avatar className="h-6 w-6">
+                               <AvatarFallback className="text-[8px] font-black">{suggest.username?.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-[10px] font-bold text-white/60">{suggest.username}</span>
+                            <button
+                              onClick={() => toggleUserAdmin(suggest.id, false)}
+                              title="Ajouter au Staff"
+                              className="w-5 h-5 bg-[#D4AF37]/10 rounded-full flex items-center justify-center hover:bg-[#D4AF37] hover:text-black transition-all"
+                            >
+                               <Plus className="w-3 h-3" />
+                            </button>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+             </div>
+          </TabsContent>
+
+          {/* SETTINGS TAB */}
+          <TabsContent value="settings" className="outline-none">
+            <div className="max-w-3xl mx-auto space-y-8">
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader>
+                  <CardTitle className="text-xl font-black uppercase tracking-tight text-[#D4AF37]">Configuration Radio Live</CardTitle>
+                  <CardDescription className="text-white/40">Définissez l'URL du flux audio qui sera diffusé en direct sur toute l'application.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleUpdateRadioSettings} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase text-white/60">Lien du flux (Icecast/Radio.co/YouTube)</Label>
+                      <Input name="liveUrl" className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://stream.radio.co/..." required />
+                    </div>
+                    <Button type="submit" className="w-full bg-[#D4AF37] text-black font-black uppercase h-12 rounded-xl">Mettre à jour le direct</Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-[#0a0a0a] border-[#222] text-white">
+                <CardHeader>
+                  <CardTitle className="text-xl font-black uppercase tracking-tight">Maintenance</CardTitle>
+                  <CardDescription className="text-white/40">Outils de nettoyage et de gestion système.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-red-500/5 border border-red-500/10">
+                    <div>
+                      <p className="font-bold text-red-500">Mode Maintenance</p>
+                      <p className="text-[10px] text-white/40 uppercase">Désactiver l'accès public à l'app</p>
+                    </div>
+                    <Button variant="destructive" size="sm" className="font-bold">Activer</Button>
+                  </div>
+                  <Button variant="outline" className="w-full border-[#333] text-white/40 hover:text-white font-bold" onClick={() => loadAllData()}>Rafraîchir tout le système</Button>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>

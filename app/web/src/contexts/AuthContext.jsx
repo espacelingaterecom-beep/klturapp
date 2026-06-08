@@ -1,48 +1,95 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient.js';
+import { supabase, subscribeNotifications, fetchUnreadCount } from '@/lib/supabaseClient.js';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
+import { toast } from 'sonner';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
+const PROFILE_CACHE_KEY = 'cached_user_profile';
+
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+
+  const refreshUnreadCount = async (userId) => {
+    const count = await fetchUnreadCount(userId);
+    setUnreadCount(count);
+  };
 
   const updateUser = async (session) => {
     try {
       if (session?.user) {
+        // 1. Tenter de charger le cache immédiatement pour la fluidité
+        const { value: cached } = await Preferences.get({ key: PROFILE_CACHE_KEY });
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.id === session.user.id) {
+            setCurrentUser(parsed);
+            setIsAuthenticated(true);
+          }
+        }
+
         const baseUser = {
           id: session.user.id,
           email: session.user.email,
           ...(session.user.user_metadata || {}),
         };
 
-        setCurrentUser(baseUser);
+        if (!currentUser) setCurrentUser(baseUser);
         setIsAuthenticated(true);
+        refreshUnreadCount(session.user.id);
 
-        // On récupère les détails du profil en arrière-plan (non-bloquant)
+        // 2. On récupère les détails frais du profil (si en ligne)
         supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
-          .then(({ data: profile }) => {
-            if (profile) {
-              setCurrentUser(prev => ({
-                ...prev,
+          .then(async ({ data: profile, error }) => {
+            if (profile && !error) {
+              // Vérification automatique de l'expiration Premium
+              let isStillPremium = profile.is_premium;
+              if (profile.is_premium && profile.premium_until) {
+                const now = new Date();
+                const expiry = new Date(profile.premium_until);
+                if (now > expiry) {
+                  isStillPremium = false;
+                  // Mise à jour silencieuse en base de données
+                  await supabase
+                    .from('profiles')
+                    .update({ is_premium: false, subscription_type: 'free' })
+                    .eq('id', profile.id);
+
+                  toast.error("Votre abonnement Premium a expiré.");
+                }
+              }
+
+              const fullUser = {
+                ...baseUser,
                 ...profile,
-                // On normalise les noms de variables pour le reste de l'app
-                isPremium: profile.is_premium === true,
+                is_premium: isStillPremium,
+                isPremium: isStillPremium === true,
                 isAdmin: profile.is_admin === true
-              }));
+              };
+              setCurrentUser(fullUser);
+              // Sauvegarder dans le cache pour le mode hors ligne
+              await Preferences.set({
+                key: PROFILE_CACHE_KEY,
+                value: JSON.stringify(fullUser)
+              });
             }
           });
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        await Preferences.remove({ key: PROFILE_CACHE_KEY });
       }
     } catch (e) {
       console.error("Auth update error:", e);
     } finally {
-      // On débloque l'affichage quoi qu'il arrive
       setLoading(false);
     }
   };
@@ -84,10 +131,85 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  // Notifications en temps réel pour les messages
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const unsub = subscribeNotifications(currentUser.id, ({ message, type }) => {
+      const isChatPage = window.location.pathname === '/messages';
+
+      if (type === 'received' && message.is_read === false) {
+        // OPTIMISATION : On n'incrémente que si on n'est PAS sur la page de chat.
+        // La page de chat gère elle-même le marquage "lu" et le refresh précis.
+        if (!isChatPage) {
+          setUnreadCount((c) => c + 1);
+
+          // Notification visuelle
+          toast("Nouveau message", {
+            description: message.content,
+            action: {
+              label: "Voir",
+              onClick: () => window.location.href = '/messages'
+            },
+          });
+        }
+      } else if (type === 'sent') {
+        if (!isChatPage) {
+          toast.success("Message envoyé", {
+            description: "Votre message a bien été transmis.",
+            duration: 2000,
+          });
+        }
+      }
+
+      // Ajouter à l'historique des notifications
+      setNotifications((prev) => [
+        {
+          id: message.id,
+          type,
+          content: message.content,
+          created_at: message.created_at,
+          conversation_id: message.conversation_id
+        },
+        ...prev,
+      ]);
+    });
+
+    return () => unsub();
+  }, [currentUser?.id]);
+
   const login = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
+  };
+
+  const loginWithGoogle = async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // Flux natif (Android/iOS)
+        const user = await GoogleAuth.signIn();
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: user.authentication.idToken,
+        });
+        if (error) throw error;
+        return data;
+      } else {
+        // Flux Web classique
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
+        if (error) throw error;
+        return data;
+      }
+    } catch (error) {
+      console.error("Google Login Error:", error);
+      throw error;
+    }
   };
 
   const signup = async (userData) => {
@@ -106,6 +228,13 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  const resetPassword = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
@@ -117,8 +246,14 @@ export const AuthProvider = ({ children }) => {
       currentUser,
       isAuthenticated,
       login,
+      loginWithGoogle,
       signup,
+      resetPassword,
       logout,
+      unreadCount,
+      setUnreadCount,
+      fetchUnreadCount: refreshUnreadCount,
+      notifications,
       isPremium: currentUser?.is_premium || currentUser?.isPremium || false,
       isAdmin: currentUser?.is_admin || currentUser?.isAdmin || false
     }}>
@@ -126,9 +261,9 @@ export const AuthProvider = ({ children }) => {
         <div className="min-h-screen bg-black flex items-center justify-center overflow-hidden">
           <div className="flex flex-col items-center animate-heartbeat px-6 text-center">
             <img
-              src="https://horizons-cdn.hostinger.com/8cb4c9c6-9962-4ccc-80b1-ea71b7a63684/866a587d484c1eedb4c3fd12c56b7757.png"
+              src="/icon-only.PNG"
               alt="Logo KLTUR RAP"
-              className="w-48 h-48 md:w-64 md:h-64 object-contain mb-8"
+              className="w-48 h-48 md:w-64 md:h-64 object-contain mb-8 drop-shadow-[0_0_30px_rgba(212,175,55,0.4)]"
             />
             <h1 className="text-4xl md:text-7xl font-black text-[#D4AF37] tracking-tighter uppercase mb-2 drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]">
               KLTUR RAP

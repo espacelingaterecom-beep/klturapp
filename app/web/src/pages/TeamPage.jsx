@@ -1,38 +1,51 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Users as UsersIcon } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabaseClient.js';
-import { Skeleton } from '@/components/ui/skeleton';
+
+const teamMembers = [
+  {
+    id: 1,
+    name: "JONATHAN MAMBACHAKA",
+    role: "CEO & Fondateur",
+    bio: "Visionnaire et leader, Jonathan est le moteur derrière la plateforme KLTUR RAP. Son objectif : propulser la culture urbaine centrafricaine sur la scène internationale.",
+    image: "https://achphabduyhwlllsysan.supabase.co/storage/v1/object/public/avatars/Jonathan%20MAMBACHAKA.jpg"
+  },
+  {
+    id: 2,
+    name: "Jospin pod NZAPA-HIMI",
+    role: "Community Manager",
+    bio: "La voix numérique de KLTUR RAP. Jospin connecte les artistes et le public, animant chaque jour la communauté passionnée du hip-hop de Bangui.",
+    image: "https://achphabduyhwlllsysan.supabase.co/storage/v1/object/public/avatars/JOSPIN%20POD%20NZAPA%20HIMI.jpg"
+  },
+  {
+    id: 3,
+    name: "Chacha2m",
+    role: "Réalisateur (Director)",
+    bio: "L'œil visuel du mouvement. Chacha2m sublime les clips, documentaires et interviews pour donner à la culture urbaine des images à la hauteur de son talent.",
+    image: "https://achphabduyhwlllsysan.supabase.co/storage/v1/object/public/avatars/CHACHA2M.jpg"
+  },
+  {
+    id: 4,
+    name: "DJ T-Bain",
+    role: "DJ & Producteur",
+    bio: "Le maître des platines. DJ T-Bain fait vibrer les événements KLTUR RAP avec ses sélections pointues et ses mixes inoubliables.",
+    image: "https://achphabduyhwlllsysan.supabase.co/storage/v1/object/public/avatars/DJ%20T-bain.jpg"
+  },
+  {
+    id: 5,
+    name: "Judicaël",
+    role: "Responsable Logistique",
+    bio: "Pilier essentiel des opérations, Judicaël s'assure que chaque événement et chaque diffusion de KLTUR RAP se déroule sans accroc.",
+    image: "https://achphabduyhwlllsysan.supabase.co/storage/v1/object/public/avatars/JUDICAEL.jpg"
+  }
+];
 
 const TeamPage = () => {
-  const [teamMembers, setTeamMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchTeam = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('team_members')
-          .select('*')
-          .order('created_at', { ascending: true });
-
-        if (error) throw error;
-        setTeamMembers(data || []);
-      } catch (err) {
-        console.error("Error fetching team:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTeam();
-  }, []);
-
   return (
     <>
       <Helmet>
@@ -67,49 +80,38 @@ const TeamPage = () => {
           {/* Team Grid Section */}
           <section className="pb-24">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-[500px] rounded-2xl bg-[#0a0a0a]" />)}
-                </div>
-              ) : teamMembers.length === 0 ? (
-                <div className="text-center py-20 bg-[#0a0a0a] rounded-3xl border border-[#222]">
-                  <UsersIcon className="w-12 h-12 text-white/10 mx-auto mb-4" />
-                  <p className="text-white/40 font-bold uppercase">L'équipe est en cours de structuration</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {teamMembers.map((member, index) => (
-                    <motion.div
-                      key={member.id}
-                      initial={{ opacity: 0, y: 30 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: index * 0.1 }}
-                      viewport={{ once: true }}
-                      className="bg-[#0a0a0a] border border-[#222] rounded-2xl overflow-hidden group hover-gold-glow"
-                    >
-                      <div className="aspect-[4/5] w-full relative overflow-hidden">
-                        <img
-                          src={member.image_url}
-                          alt={`Photo de ${member.name}`}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 filter grayscale group-hover:grayscale-0"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-
-                        <div className="absolute bottom-0 left-0 w-full p-6">
-                          <h3 className="text-2xl font-bold text-white mb-1 uppercase">{member.name}</h3>
-                          <p className="text-[#D4AF37] font-black text-sm uppercase tracking-widest">{member.role}</p>
-                        </div>
-                      </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {teamMembers.map((member, index) => (
+                  <motion.div
+                    key={member.id}
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    viewport={{ once: true }}
+                    className="bg-[#0a0a0a] border border-[#222] rounded-2xl overflow-hidden group hover-gold-glow"
+                  >
+                    <div className="aspect-[4/5] w-full relative overflow-hidden">
+                      <img 
+                        src={member.image} 
+                        alt={`Photo de ${member.name}`}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 filter grayscale group-hover:grayscale-0"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
                       
-                      <div className="p-6 border-t border-[#222]">
-                        <p className="text-white/70 text-sm leading-relaxed">
-                          {member.bio}
-                        </p>
+                      <div className="absolute bottom-0 left-0 w-full p-6">
+                        <h3 className="text-2xl font-bold text-white mb-1">{member.name}</h3>
+                        <p className="text-[#D4AF37] font-semibold text-sm uppercase tracking-wider">{member.role}</p>
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
+                    </div>
+                    
+                    <div className="p-6 border-t border-[#222]">
+                      <p className="text-white/70 text-sm leading-relaxed line-clamp-3 md:line-clamp-none hover:line-clamp-none transition-all cursor-default">
+                        {member.bio}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </div>
           </section>
 

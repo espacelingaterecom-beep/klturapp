@@ -1,53 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext.jsx';
-import { supabase } from '@/lib/supabaseClient.js';
 
 const FloatingMessageButton = () => {
-  const { isAuthenticated, currentUser } = useAuth();
   const location = useLocation();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { isAuthenticated, unreadCount } = useAuth();
 
-  useEffect(() => {
-    if (!isAuthenticated || !currentUser) return;
-
-    const fetchUnreadCount = async () => {
-      try {
-        const { count, error } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('recipient_id', currentUser.id)
-          .eq('is_read', false);
-
-        if (error) throw error;
-        setUnreadCount(count || 0);
-      } catch (err) {
-        console.error("Unread count fetch error:", err);
-      }
-    };
-
-    fetchUnreadCount();
-
-    // S'abonner aux nouveaux messages en temps réel
-    const channel = supabase
-      .channel('unread-messages')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'messages',
-        filter: `recipient_id=eq.${currentUser.id}`
-      }, () => {
-        fetchUnreadCount();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [isAuthenticated, currentUser]);
-
+  // Ne pas afficher si non connecté ou sur la page de messagerie
   if (!isAuthenticated || location.pathname === '/messages') return null;
 
   return (

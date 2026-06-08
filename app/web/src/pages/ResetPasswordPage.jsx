@@ -69,7 +69,7 @@ const ResetPasswordPage = () => {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="password" surprised className="text-white/80 font-bold">Nouveau mot de passe</Label>
+                <Label htmlFor="password" className="text-white/80 font-bold">Nouveau mot de passe</Label>
                 <Input
                   id="password"
                   type="password"

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Award, Music, Play, Eye, Download, UserPlus, MessageSquare, Edit2, Globe, Youtube, Facebook, Instagram, Twitter, Image as ImageIcon, Heart, Repeat2, Video, MessageCircle, Ghost } from 'lucide-react';
+import { Award, Music, Play, Eye, Download, UserPlus, MessageSquare, Edit2, Globe, Youtube, Facebook, Instagram, Twitter, Image as ImageIcon, Heart, Repeat2, Video, MessageCircle, Ghost, Apple, Music2, ShieldCheck, CheckCircle2, Trophy, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -10,8 +10,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import LikersModal from '@/components/LikersModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const PublicArtistProfilePage = () => {
   const { userId } = useParams();
@@ -26,42 +28,52 @@ const PublicArtistProfilePage = () => {
   const [stats, setStats] = useState({ views: 0, total: 0, followers: 0, posts: 0, reposts: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
   const [followId, setFollowId] = useState(null);
+  const [isBioExpanded, setIsBioExpanded] = useState(false);
 
-  const isOwner = currentUser?.id === userId;
+  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [showLikersModal, setShowLikersModal] = useState(false);
+
+  const isOwner = currentUser?.id === artist?.id;
 
   useEffect(() => {
     const fetchArtistData = async () => {
       try {
-        // Fetch Artist Profile
-        const { data: userData, error: userError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
+        // Check if userId is a valid UUID or a username
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId);
+
+        let userQuery = supabase.from('profiles').select('*');
+        if (isUUID) {
+          userQuery = userQuery.eq('id', userId);
+        } else {
+          userQuery = userQuery.eq('username', userId);
+        }
+
+        const { data: userData, error: userError } = await userQuery.single();
 
         if (userError) throw userError;
         setArtist(userData);
+        const actualId = userData.id;
 
         // Fetch Uploads, Followers, Posts and Reposts
         const [uploadsResult, followersResult, postsResult, repostsResult] = await Promise.all([
           supabase
             .from('uploads')
             .select('*', { count: 'exact' })
-            .eq('user_id', userId)
+            .eq('user_id', actualId)
             .order('created_at', { ascending: false }),
           supabase
             .from('followers')
             .select('*', { count: 'exact' })
-            .eq('following_id', userId),
+            .eq('following_id', actualId),
           supabase
             .from('posts')
             .select('*', { count: 'exact' })
-            .eq('user_id', userId)
+            .eq('user_id', actualId)
             .order('created_at', { ascending: false }),
           supabase
             .from('reposts')
             .select('*, posts(*, profiles:user_id(*)), uploads(*, profiles:user_id(*))', { count: 'exact' })
-            .eq('user_id', userId)
+            .eq('user_id', actualId)
             .order('created_at', { ascending: false })
         ]);
         
@@ -94,12 +106,12 @@ const PublicArtistProfilePage = () => {
           reposts: repostsResult.count || 0
         });
 
-        if (isAuthenticated && !isOwner) {
+        if (isAuthenticated && currentUser?.id !== actualId) {
           const { data: myFollow, error: followError } = await supabase
             .from('followers')
             .select('id')
             .eq('follower_id', currentUser.id)
-            .eq('following_id', userId)
+            .eq('following_id', actualId)
             .maybeSingle();
 
           if (myFollow) {
@@ -117,10 +129,11 @@ const PublicArtistProfilePage = () => {
 
     fetchArtistData();
     window.scrollTo(0, 0);
-  }, [userId, isAuthenticated, currentUser, isOwner]);
+  }, [userId, isAuthenticated, currentUser]);
 
   const handleFollow = async () => {
     if (!isAuthenticated) return toast.error("Connectez-vous pour suivre");
+    if (!artist) return;
 
     try {
       if (isFollowing) {
@@ -138,7 +151,7 @@ const PublicArtistProfilePage = () => {
           .from('followers')
           .insert({
             follower_id: currentUser.id,
-            following_id: userId
+            following_id: artist.id
           })
           .select()
           .single();
@@ -157,14 +170,14 @@ const PublicArtistProfilePage = () => {
   };
 
   const handleMessage = async () => {
-    if (!isAuthenticated || !currentUser) return toast.error("Connectez-vous pour envoyer un message");
+    if (!isAuthenticated || !currentUser || !artist) return toast.error("Connectez-vous pour envoyer un message");
 
     try {
       // 1. Chercher si une conversation existe déjà
       const { data: existing, error } = await supabase
         .from('conversations')
         .select('id')
-        .or(`and(participant1_id.eq.${currentUser.id},participant2_id.eq.${userId}),and(participant1_id.eq.${userId},participant2_id.eq.${currentUser.id})`)
+        .or(`and(participant1_id.eq.${currentUser.id},participant2_id.eq.${artist.id}),and(participant1_id.eq.${artist.id},participant2_id.eq.${currentUser.id})`)
         .maybeSingle();
 
       if (error) throw error;
@@ -175,7 +188,7 @@ const PublicArtistProfilePage = () => {
         // 2. Créer une nouvelle conversation si inexistante
         const { data: newConv, error: createError } = await supabase
           .from('conversations')
-          .insert([{ participant1_id: currentUser.id, participant2_id: userId, last_message: 'Nouvelle conversation' }])
+          .insert([{ participant1_id: currentUser.id, participant2_id: artist.id, last_message: 'Nouvelle conversation' }])
           .select()
           .single();
 
@@ -207,11 +220,38 @@ const PublicArtistProfilePage = () => {
     return { background: '#111111' };
   };
 
+  const getBadge = (user) => {
+    if (user?.subscription_type === 'artist_premium') {
+      return <Trophy className="w-6 h-6 text-[#D4AF37] drop-shadow-[0_0_8px_rgba(212,175,55,1)]" title="Artiste Élite" />;
+    }
+    if (user?.subscription_type === 'artist' || user?.is_premium && !user?.subscription_type) {
+      return <Award className="w-6 h-6 text-[#D4AF37]" title="Artiste Certifié" />;
+    }
+    if (user?.subscription_type === 'auditor') {
+      return <ShieldCheck className="w-6 h-6 text-blue-400" title="Auditeur Premium" />;
+    }
+    return null;
+  };
+
+  const getSocialIcon = (platform) => {
+    const p = platform.toLowerCase();
+    if (p.includes('facebook')) return <Facebook className="w-5 h-5" />;
+    if (p.includes('instagram')) return <Instagram className="w-5 h-5" />;
+    if (p.includes('twitter') || p === 'x') return <Twitter className="w-5 h-5" />;
+    if (p.includes('youtube')) return <Youtube className="w-5 h-5" />;
+    if (p.includes('spotify') || p.includes('music')) return <Music2 className="w-5 h-5" />;
+    if (p.includes('apple')) return <Apple className="w-5 h-5" />;
+    if (p.includes('whatsapp')) return <MessageCircle className="w-5 h-5" />;
+    if (p.includes('tiktok') || p.includes('snapchat')) return <Ghost className="w-5 h-5" />;
+    return <Globe className="w-5 h-5" />;
+  };
+
   return (
     <>
       <Helmet><title>{artist?.username || artist?.name || 'Artiste'} - KLTUR RAP</title></Helmet>
       <div className="min-h-screen flex flex-col bg-[#050505]">
         <Header />
+        <LikersModal isOpen={showLikersModal} onClose={() => setShowLikersModal(false)} postId={selectedPostId} />
 
         <main className="flex-grow pb-12 w-full">
           {/* Banner */}
@@ -235,11 +275,25 @@ const PublicArtistProfilePage = () => {
                 <div className="flex-grow text-center md:text-left mt-4 md:mt-0">
                   <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
                     <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight">{artist?.username || artist?.name}</h1>
-                    {artist?.is_premium && <Award className="w-6 h-6 text-[#D4AF37]" title="Certifié" />}
+                    {getBadge(artist)}
                   </div>
                   <p className="text-[#D4AF37] font-bold uppercase tracking-wider text-sm mb-4">{artist?.user_role || 'Artiste'}</p>
                   
-                  {artist?.bio && <p className="text-white/80 max-w-2xl mb-6 leading-relaxed">{artist.bio}</p>}
+                  {artist?.bio && (
+                    <div className="mb-6 relative">
+                      <p className={`text-white/80 max-w-2xl leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isBioExpanded ? 'line-clamp-3' : ''}`}>
+                        {formatRichText(artist.bio)}
+                      </p>
+                      {artist.bio.length > 200 && (
+                        <button
+                          onClick={() => setIsBioExpanded(!isBioExpanded)}
+                          className="mt-2 text-[#D4AF37] font-black text-[10px] uppercase tracking-widest hover:underline"
+                        >
+                          {isBioExpanded ? 'Voir moins' : 'Lire la bio complète'}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-6">
                     {isOwner ? (
@@ -259,7 +313,7 @@ const PublicArtistProfilePage = () => {
                   </div>
 
                   {/* Socials */}
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
                     {artist?.website && (
                       <a href={artist.website} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-[#111] border border-[#222] flex items-center justify-center text-white/50 hover:text-[#D4AF37] hover:border-[#D4AF37] transition-all" title="Site Web">
                         <Globe className="w-5 h-5" />
@@ -267,9 +321,17 @@ const PublicArtistProfilePage = () => {
                     )}
                     {artist?.social_links && Object.entries(artist.social_links).map(([platform, url]) => {
                       if (!url) return null;
+                      const fullUrl = url.startsWith('http') ? url : `https://${url}`;
                       return (
-                        <a key={platform} href={url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-[#111] border border-[#222] flex items-center justify-center text-white/50 hover:text-[#D4AF37] transition-all">
-                          <Globe className="w-5 h-5" />
+                        <a
+                          key={platform}
+                          href={fullUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-10 h-10 rounded-full bg-[#111] border border-[#222] flex items-center justify-center text-white/50 hover:text-[#D4AF37] hover:border-[#D4AF37] transition-all"
+                          title={platform}
+                        >
+                          {getSocialIcon(platform)}
                         </a>
                       );
                     })}
@@ -358,7 +420,17 @@ const PublicArtistProfilePage = () => {
                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">
                             <p className="text-white text-xs line-clamp-3">{post.caption}</p>
                             <div className="flex items-center gap-3 mt-2 text-[10px] text-white/70 font-bold uppercase">
-                              <span className="flex items-center gap-1"><Heart className="w-3 h-3 fill-red-500 text-red-500" /> {post.likes_count || 0}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setSelectedPostId(post.id);
+                                  setShowLikersModal(true);
+                                }}
+                                className="flex items-center gap-1 hover:scale-110 transition-transform"
+                              >
+                                <Heart className="w-3 h-3 fill-red-500 text-red-500" /> {post.likes_count || 0}
+                              </button>
                               <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {post.comments_count || 0}</span>
                               <span className="ml-auto">{new Date(post.created_at).toLocaleDateString()}</span>
                             </div>

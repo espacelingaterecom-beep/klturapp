@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Repeat2, Share2, Facebook, Twitter, Trash2, Award, ChevronLeft } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share2, Facebook, Twitter, Trash2, Award, ChevronLeft, Eye, ShieldCheck, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -10,9 +10,12 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import LikersModal from '@/components/LikersModal.jsx';
 import LoginPromptModal from '@/components/LoginPromptModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const PostDetailPage = () => {
   const { id } = useParams();
@@ -35,6 +38,84 @@ const PostDetailPage = () => {
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
 
+  const getBadge = (user) => {
+    if (user?.subscription_type === 'artist_premium') {
+      return <Trophy className="w-3.5 h-3.5 text-[#D4AF37] drop-shadow-[0_0_5px_rgba(212,175,55,0.8)]" title="Artiste Élite" />;
+    }
+    if (user?.subscription_type === 'artist' || (user?.is_premium && !user?.subscription_type)) {
+      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" title="Artiste Certifié" />;
+    }
+    if (user?.subscription_type === 'auditor') {
+      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" title="Auditeur Premium" />;
+    }
+    return null;
+  };
+
+  const [showLikersModal, setShowLikersModal] = useState(false);
+  const [expandedComments, setExpandedComments] = useState({});
+
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
+  const [hashtagSuggestions, setHashtagSuggestions] = useState([]);
+  const [mentionIndex, setMentionIndex] = useState(-1);
+
+  const handleCommentChange = async (e) => {
+    const val = e.target.value;
+    setNewComment(val);
+
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorPosition);
+    const words = textBeforeCursor.split(/\s/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith('@') && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      setMentionIndex(cursorPosition - lastWord.length);
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, username, avatar')
+        .ilike('username', `${query}%`)
+        .limit(5);
+
+      setMentionSuggestions(data || []);
+      setHashtagSuggestions([]);
+    } else if (lastWord.startsWith('#') && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      setMentionIndex(cursorPosition - lastWord.length);
+
+      const tags = ['RCA', 'HipHop', 'Bangui', 'KlturRap', 'Nouveauté', 'Clip', 'RapCentrafricain']
+        .filter(t => t.toLowerCase().startsWith(query.toLowerCase()))
+        .slice(0, 5);
+
+      setHashtagSuggestions(tags);
+      setMentionSuggestions([]);
+    } else {
+      setMentionSuggestions([]);
+      setHashtagSuggestions([]);
+    }
+  };
+
+  const selectMention = (username) => {
+    const before = newComment.substring(0, mentionIndex);
+    const after = newComment.substring(newComment.indexOf(' ', mentionIndex) === -1 ? newComment.length : newComment.indexOf(' ', mentionIndex));
+    setNewComment(`${before}@${username} ${after.trim()}`);
+    setMentionSuggestions([]);
+  };
+
+  const selectHashtag = (tag) => {
+    const before = newComment.substring(0, mentionIndex);
+    const after = newComment.substring(newComment.indexOf(' ', mentionIndex) === -1 ? newComment.length : newComment.indexOf(' ', mentionIndex));
+    setNewComment(`${before}#${tag} ${after.trim()}`);
+    setHashtagSuggestions([]);
+  };
+
+  const toggleCommentExpand = (commentId) => {
+    setExpandedComments(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
+
   useEffect(() => {
     const fetchPostData = async () => {
       try {
@@ -45,6 +126,15 @@ const PostDetailPage = () => {
           .single();
 
         if (error) throw error;
+
+        // Increment view count via RPC for logging
+        await supabase.rpc('increment_post_view_count', {
+          post_id: id,
+          viewer_id: currentUser?.id || null
+        });
+
+        data.view_count = (data.view_count || 0) + 1;
+
         setPost(data);
         setLikesCount(data.likes_count || 0);
         setRepostsCount(data.reposts_count || 0);
@@ -197,6 +287,7 @@ const PostDetailPage = () => {
       <Helmet><title>Post de {artist?.username || 'Artiste'} - KLTUR RAP</title></Helmet>
       <Header />
       <LoginPromptModal isOpen={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
+      <LikersModal isOpen={showLikersModal} onClose={() => setShowLikersModal(false)} postId={id} />
 
       <main className="flex-grow py-8 px-4">
         <div className="max-w-5xl mx-auto">
@@ -226,7 +317,7 @@ const PostDetailPage = () => {
                   <div>
                     <h2 className="font-bold text-white group-hover:text-[#D4AF37] transition-colors flex items-center gap-1">
                       {artist?.username || artist?.name}
-                      {artist?.is_premium && <Award className="w-3.5 h-3.5 text-[#D4AF37]" />}
+                      {getBadge(artist)}
                     </h2>
                     <p className="text-[10px] text-white/40 uppercase font-black tracking-wider">{new Date(post.created_at).toLocaleDateString()}</p>
                   </div>
@@ -237,7 +328,7 @@ const PostDetailPage = () => {
               <div className="flex-grow overflow-y-auto p-6 space-y-6 max-h-[400px] lg:max-h-none">
                 {post.caption && (
                   <div className="pb-6 border-b border-[#222]">
-                    <p className="text-white/90 leading-relaxed">{post.caption}</p>
+                    <p className="text-white/90 leading-relaxed">{formatRichText(post.caption)}</p>
                   </div>
                 )}
 
@@ -253,10 +344,25 @@ const PostDetailPage = () => {
                         </Avatar>
                         <div className="bg-[#111] p-3 rounded-2xl rounded-tl-none border border-[#222] flex-grow">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-xs text-[#D4AF37]">{comment.profiles?.username}</span>
+                            <span className="font-bold text-xs text-[#D4AF37] flex items-center gap-1">
+                              {comment.profiles?.username}
+                              {getBadge(comment.profiles)}
+                            </span>
                             <span className="text-[10px] text-white/30">{new Date(comment.created_at).toLocaleDateString()}</span>
                           </div>
-                          <p className="text-sm text-white/80">{comment.text}</p>
+                          <div className="relative">
+                            <p className={`text-sm text-white/80 whitespace-pre-wrap transition-all duration-200 ${!expandedComments[comment.id] ? 'line-clamp-3' : ''}`}>
+                              {formatRichText(comment.text)}
+                            </p>
+                            {comment.text.length > 150 && (
+                              <button
+                                onClick={() => toggleCommentExpand(comment.id)}
+                                className="mt-1 text-[#D4AF37] font-bold text-[9px] uppercase tracking-widest hover:underline"
+                              >
+                                {expandedComments[comment.id] ? 'Voir moins' : 'Voir plus'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))
@@ -268,13 +374,19 @@ const PostDetailPage = () => {
               <div className="p-6 bg-[#0a0a0a] border-t border-[#222]">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-4">
-                    <button onClick={handleLike} className={`transition-all hover:scale-110 flex items-center gap-1.5 ${isLiked ? 'text-red-500' : 'text-white/60 hover:text-white'}`}>
-                      <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
-                      <span className="text-sm font-bold">{likesCount}</span>
-                    </button>
+                    <div className="flex items-center gap-1.5 group cursor-pointer" onClick={() => setShowLikersModal(true)}>
+                      <button onClick={(e) => { e.stopPropagation(); handleLike(); }} className={`transition-all hover:scale-110 ${isLiked ? 'text-red-500' : 'text-white/60 hover:text-white'}`}>
+                        <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
+                      </button>
+                      <span className="text-sm font-bold text-white/60 group-hover:text-white transition-colors">{likesCount}</span>
+                    </div>
                     <div className="flex items-center gap-1.5 text-white/60">
                       <MessageCircle className="w-6 h-6" />
                       <span className="text-sm font-bold">{comments.length}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-white/60">
+                      <Eye className="w-6 h-6" />
+                      <span className="text-sm font-bold">{post?.view_count || 0}</span>
                     </div>
                     <button
                       onClick={handleRepost}
@@ -297,10 +409,41 @@ const PostDetailPage = () => {
                   </DropdownMenu>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 relative">
+                  {mentionSuggestions.length > 0 && (
+                    <div className="absolute bottom-full left-0 w-full bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                      {mentionSuggestions.map(user => (
+                        <button
+                          key={user.id}
+                          onClick={() => selectMention(user.username)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left"
+                        >
+                          <Avatar className="h-6 w-6 border border-white/10">
+                            <AvatarImage src={getPublicImageUrl('avatars', user.avatar)} />
+                            <AvatarFallback>{user.username[0]}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-bold text-sm">@{user.username}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {hashtagSuggestions.length > 0 && (
+                    <div className="absolute bottom-full left-0 w-full bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                      {hashtagSuggestions.map(tag => (
+                        <button
+                          key={tag}
+                          onClick={() => selectHashtag(tag)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left font-bold text-sm"
+                        >
+                          #{tag}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <Textarea
                     value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
+                    onChange={handleCommentChange}
                     placeholder="Votre avis..."
                     className="bg-[#111] border-[#222] focus:border-[#D4AF37] resize-none h-12 min-h-0 py-3"
                   />

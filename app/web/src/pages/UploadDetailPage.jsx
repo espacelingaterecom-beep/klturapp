@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit } from 'lucide-react';
+import { Play, Pause, Download, Eye, Calendar, Award, Heart, MessageCircle, Star, Repeat2, Share2, Facebook, Twitter, Trash2, Edit, CheckCircle, CheckCircle2, WifiOff, ShieldCheck, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -14,17 +14,22 @@ import LoginPromptModal from '@/components/LoginPromptModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { useAudio } from '@/contexts/AudioContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
+import { Capacitor } from '@capacitor/core';
+import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const UploadDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser, isAuthenticated } = useAuth();
-  const { playTrack, currentTrack, isPlaying } = useAudio();
+  const { playTrack, currentTrack, isPlaying, downloadForOffline, removeOffline, offlineTracks } = useAudio();
 
   const [upload, setUpload] = useState(null);
   const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const isDownloaded = upload ? offlineTracks.some(t => t.id === upload.id) : false;
+
   // Interaction states
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [stats, setStats] = useState({ likes: 0, favorites: 0, reposts: 0 });
@@ -38,6 +43,74 @@ const UploadDetailPage = () => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [expandedComments, setExpandedComments] = useState({});
+
+  const [hasVoted, setHasVoted] = useState(false);
+  const [isVoting, setIsVoting] = useState(false);
+  const [voteCount, setVoteCount] = useState(0);
+
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
+  const [hashtagSuggestions, setHashtagSuggestions] = useState([]);
+  const [mentionIndex, setMentionIndex] = useState(-1);
+
+  const handleCommentChange = async (e) => {
+    const val = e.target.value;
+    setNewComment(val);
+
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorPosition);
+    const words = textBeforeCursor.split(/\s/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith('@') && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      setMentionIndex(cursorPosition - lastWord.length);
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, username, avatar')
+        .ilike('username', `${query}%`)
+        .limit(5);
+
+      setMentionSuggestions(data || []);
+      setHashtagSuggestions([]);
+    } else if (lastWord.startsWith('#') && lastWord.length > 1) {
+      const query = lastWord.substring(1);
+      setMentionIndex(cursorPosition - lastWord.length);
+
+      const tags = ['RCA', 'HipHop', 'Bangui', 'KlturRap', 'Nouveauté', 'Clip', 'RapCentrafricain']
+        .filter(t => t.toLowerCase().startsWith(query.toLowerCase()))
+        .slice(0, 5);
+
+      setHashtagSuggestions(tags);
+      setMentionSuggestions([]);
+    } else {
+      setMentionSuggestions([]);
+      setHashtagSuggestions([]);
+    }
+  };
+
+  const selectMention = (username) => {
+    const before = newComment.substring(0, mentionIndex);
+    const after = newComment.substring(newComment.indexOf(' ', mentionIndex) === -1 ? newComment.length : newComment.indexOf(' ', mentionIndex));
+    setNewComment(`${before}@${username} ${after.trim()}`);
+    setMentionSuggestions([]);
+  };
+
+  const selectHashtag = (tag) => {
+    const before = newComment.substring(0, mentionIndex);
+    const after = newComment.substring(newComment.indexOf(' ', mentionIndex) === -1 ? newComment.length : newComment.indexOf(' ', mentionIndex));
+    setNewComment(`${before}#${tag} ${after.trim()}`);
+    setHashtagSuggestions([]);
+  };
+
+  const toggleCommentExpand = (commentId) => {
+    setExpandedComments(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
 
   const getFileUrl = (bucket, path) => {
     if (!path) return '';
@@ -88,6 +161,14 @@ const UploadDetailPage = () => {
           reposts: repRes.count || 0
         });
 
+        // Fetch Track Votes
+        const { count: votesCount } = await supabase
+          .from('track_votes')
+          .select('*', { count: 'exact', head: true })
+          .eq('upload_id', id);
+
+        setVoteCount(votesCount || 0);
+
         const mappedComments = (commentsRes.data || []).map(c => ({
           ...c,
           expand: {
@@ -108,6 +189,16 @@ const UploadDetailPage = () => {
             favorited: !!myFav.data, favId: myFav.data?.id,
             reposted: !!myRep.data, repId: myRep.data?.id
           });
+
+          // Check if user already voted for this track
+          const { data: myVote } = await supabase
+            .from('track_votes')
+            .select('id')
+            .eq('upload_id', id)
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+
+          setHasVoted(!!myVote);
         }
 
         // Related
@@ -238,6 +329,37 @@ const UploadDetailPage = () => {
     }
   };
 
+  const handleOfflineAction = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      toast.error("Le téléchargement hors ligne est réservé à l'application mobile.");
+      return;
+    }
+
+    if (isDownloaded) {
+      if (window.confirm("Supprimer ce morceau de votre stockage hors ligne ?")) {
+        await removeOffline(upload.id);
+        toast.success("Supprimé du mode hors ligne");
+      }
+      return;
+    }
+
+    setIsDownloading(true);
+    const success = await downloadForOffline({
+      id: upload.id,
+      title: upload.title,
+      artist: artist?.name || 'Artiste Inconnu',
+      url: mediaUrl,
+      cover: getFileUrl('covers', upload.cover_art)
+    });
+
+    if (success) {
+      toast.success("Disponible hors ligne !");
+    } else {
+      toast.error("Échec du téléchargement hors ligne.");
+    }
+    setIsDownloading(false);
+  };
+
   const handleDownload = async () => {
     if (!upload) return;
     try {
@@ -266,6 +388,39 @@ const UploadDetailPage = () => {
     }
   };
 
+  const handleVote = async () => {
+    if (!isAuthenticated) return setShowLoginPrompt(true);
+    if (hasVoted) {
+      toast.info("Vous avez déjà voté pour ce morceau cette semaine !");
+      return;
+    }
+
+    setIsVoting(true);
+    try {
+      const { error } = await supabase
+        .from('track_votes')
+        .insert([{ upload_id: id, user_id: currentUser.id }]);
+
+      if (error) {
+        if (error.code === '23505') {
+           toast.info("Déjà voté !");
+           setHasVoted(true);
+           return;
+        }
+        throw error;
+      }
+
+      setHasVoted(true);
+      setVoteCount(prev => prev + 1);
+      toast.success("Vote enregistré ! Merci pour votre soutien.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors du vote.");
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col">
@@ -280,6 +435,19 @@ const UploadDetailPage = () => {
   const isVideo = upload.type === 'Music Video' && upload.file_path;
   const mediaUrl = isVideo ? getFileUrl('uploads', upload.file_path) : getFileUrl('uploads', upload.file_path);
   const isOwner = currentUser?.id === artist?.id;
+
+  const getBadge = (user) => {
+    if (user?.subscription_type === 'artist_premium') {
+      return <Trophy className="w-3.5 h-3.5 text-[#D4AF37] drop-shadow-[0_0_5px_rgba(212,175,55,0.8)]" title="Artiste Élite" />;
+    }
+    if (user?.subscription_type === 'artist' || user?.is_premium && !user?.subscription_type) {
+      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" title="Artiste Certifié" />;
+    }
+    if (user?.subscription_type === 'auditor') {
+      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" title="Auditeur Premium" />;
+    }
+    return null;
+  };
 
   return (
     <>
@@ -323,39 +491,53 @@ const UploadDetailPage = () => {
                       <h1 className="text-3xl md:text-4xl font-black text-white mb-2">{upload.title}</h1>
                       <Link to={`/profil/${artist?.id}`} className="text-lg text-white/70 hover:text-[#D4AF37] font-medium block mb-6 transition-colors">{artist?.name || 'Artiste Inconnu'}</Link>
 
-                      {mediaUrl && (
-                        <Button
-                          onClick={() => playTrack({
-                            id: upload.id,
-                            title: upload.title,
-                            artist: artist?.name || 'Artiste Inconnu',
-                            url: mediaUrl,
-                            cover: getFileUrl('covers', upload.cover_art)
-                          }, [
-                            {
+                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-8">
+                        {mediaUrl && (
+                          <Button
+                            onClick={() => playTrack({
                               id: upload.id,
                               title: upload.title,
                               artist: artist?.name || 'Artiste Inconnu',
                               url: mediaUrl,
                               cover: getFileUrl('covers', upload.cover_art)
-                            },
-                            ...related.map(r => ({
-                              id: r.id,
-                              title: r.title,
-                              artist: artist?.name || 'Artiste Inconnu',
-                              url: getFileUrl('uploads', r.file_path),
-                              cover: getFileUrl('covers', r.cover_art)
-                            }))
-                          ])}
-                          className="w-full md:w-auto h-14 px-10 bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black text-lg uppercase tracking-wider rounded-full gold-glow"
+                            }, [
+                              {
+                                id: upload.id,
+                                title: upload.title,
+                                artist: artist?.name || 'Artiste Inconnu',
+                                url: mediaUrl,
+                                cover: getFileUrl('covers', upload.cover_art)
+                              },
+                              ...related.map(r => ({
+                                id: r.id,
+                                title: r.title,
+                                artist: artist?.name || 'Artiste Inconnu',
+                                url: getFileUrl('uploads', r.file_path),
+                                cover: getFileUrl('covers', r.cover_art)
+                              }))
+                            ])}
+                            className="w-full md:w-auto h-14 px-10 bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black text-lg uppercase tracking-wider rounded-full gold-glow"
+                          >
+                            {currentTrack?.id === upload.id && isPlaying ? (
+                              <><Pause className="w-6 h-6 mr-2 fill-current" /> Pause</>
+                            ) : (
+                              <><Play className="w-6 h-6 mr-2 fill-current" /> Écouter</>
+                            )}
+                          </Button>
+                        )}
+
+                        <Button
+                          onClick={handleVote}
+                          disabled={isVoting || hasVoted}
+                          className={`w-full md:w-auto h-14 px-8 border-2 font-black text-lg uppercase tracking-wider rounded-full transition-all ${
+                            hasVoted
+                            ? 'bg-green-600/20 border-green-600 text-green-500 cursor-default'
+                            : 'bg-transparent border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black'
+                          }`}
                         >
-                          {currentTrack?.id === upload.id && isPlaying ? (
-                            <><Pause className="w-6 h-6 mr-2 fill-current" /> Pause</>
-                          ) : (
-                            <><Play className="w-6 h-6 mr-2 fill-current" /> Écouter maintenant</>
-                          )}
+                          {isVoting ? 'Vote...' : hasVoted ? <><CheckCircle2 className="w-6 h-6 mr-2" /> Voté</> : <><Award className="w-6 h-6 mr-2" /> Voter pour le Top</>}
                         </Button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -388,9 +570,31 @@ const UploadDetailPage = () => {
                         <DropdownMenuItem onClick={() => handleShare('copy')} className="cursor-pointer">Copier le lien</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button onClick={handleDownload} className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-bold">
+                        <Button onClick={handleDownload} className="bg-white/10 text-white hover:bg-white/20 font-bold border border-[#333]">
                       <Download className="w-4 h-4 mr-2" /> {upload.download_count || 0}
                     </Button>
+
+                    {/* Offline Button */}
+                    {Capacitor.isNativePlatform() && (
+                      <Button
+                        onClick={handleOfflineAction}
+                        disabled={isDownloading}
+                        className={`font-bold transition-all ${
+                          isDownloaded
+                            ? 'bg-green-600/20 text-green-500 border border-green-600/50 hover:bg-green-600/30'
+                            : 'bg-[#D4AF37] text-black hover:bg-[#b5952f]'
+                        }`}
+                      >
+                        {isDownloading ? (
+                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                        ) : isDownloaded ? (
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                        ) : (
+                          <WifiOff className="w-4 h-4 mr-2" />
+                        )}
+                        {isDownloaded ? 'Hors ligne' : 'Rendre hors ligne'}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -421,11 +625,23 @@ const UploadDetailPage = () => {
                 {upload.collaborators && (
                   <div className="mb-6 bg-[#111] p-4 rounded-xl border border-[#333]">
                     <p className="text-[#D4AF37] text-xs font-bold uppercase mb-1">En featuring</p>
-                    <p className="text-white font-medium">{upload.collaborators}</p>
+                    <div className="text-white font-medium">{formatRichText(upload.collaborators)}</div>
                   </div>
                 )}
                 {upload.description ? (
-                  <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{upload.description}</p>
+                  <div className="relative">
+                    <p className={`text-white/80 leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isDescExpanded ? 'line-clamp-4' : ''}`}>
+                      {formatRichText(upload.description)}
+                    </p>
+                    {upload.description.length > 300 && (
+                      <button
+                        onClick={() => setIsDescExpanded(!isDescExpanded)}
+                        className="mt-3 text-[#D4AF37] font-black text-[10px] uppercase tracking-widest hover:underline"
+                      >
+                        {isDescExpanded ? 'Voir moins' : 'Lire la suite'}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-white/40 italic">Aucune description fournie.</p>
                 )}
@@ -442,11 +658,44 @@ const UploadDetailPage = () => {
                     <AvatarImage src={currentUser?.avatar ? getFileUrl('avatars', currentUser.avatar) : ''} />
                     <AvatarFallback className="bg-[#222] text-[#D4AF37] font-bold">{currentUser?.username?.charAt(0) || 'U'}</AvatarFallback>
                   </Avatar>
-                  <div className="flex-grow">
+                  <div className="flex-grow relative">
                     <Textarea 
-                      value={newComment} onChange={e => setNewComment(e.target.value)} onClick={() => !isAuthenticated && setShowLoginPrompt(true)}
+                      value={newComment} onChange={handleCommentChange} onClick={() => !isAuthenticated && setShowLoginPrompt(true)}
                       placeholder="Ajouter un commentaire..." className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37] resize-none min-h-[80px] mb-2"
                     />
+
+                    {mentionSuggestions.length > 0 && (
+                      <div className="absolute bottom-full left-0 w-64 bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                        {mentionSuggestions.map(user => (
+                          <button
+                            key={user.id}
+                            onClick={() => selectMention(user.username)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left"
+                          >
+                            <Avatar className="h-6 w-6 border border-white/10">
+                              <AvatarImage src={getFileUrl('avatars', user.avatar)} />
+                              <AvatarFallback>{user.username[0]}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-bold text-sm">@{user.username}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {hashtagSuggestions.length > 0 && (
+                      <div className="absolute bottom-full left-0 w-64 bg-[#111] border border-[#222] rounded-xl shadow-2xl z-50 mb-2 overflow-hidden">
+                        {hashtagSuggestions.map(tag => (
+                          <button
+                            key={tag}
+                            onClick={() => selectHashtag(tag)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#D4AF37] hover:text-black transition-colors text-left font-bold text-sm"
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="flex justify-end">
                       <Button onClick={handlePostComment} disabled={postingComment || !newComment.trim()} className="bg-[#D4AF37] text-black hover:bg-[#b5952f] font-bold px-6">
                         Poster
@@ -469,7 +718,7 @@ const UploadDetailPage = () => {
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-bold text-white text-sm flex items-center gap-1">
                               {c.expand?.userId?.username || c.expand?.userId?.name}
-                              {c.expand?.userId?.is_premium && <Award className="w-3 h-3 text-[#D4AF37]" />}
+                              {getBadge(c.expand?.userId)}
                             </span>
                             <span className="text-xs text-white/40">{new Date(c.created_at).toLocaleDateString('fr-FR')}</span>
                             {currentUser?.id === c.user_id && (
@@ -478,7 +727,19 @@ const UploadDetailPage = () => {
                               </button>
                             )}
                           </div>
-                          <p className="text-white/80 text-sm leading-relaxed">{c.text}</p>
+                          <div className="relative">
+                            <p className={`text-white/80 text-sm leading-relaxed whitespace-pre-wrap transition-all duration-200 ${!expandedComments[c.id] ? 'line-clamp-3' : ''}`}>
+                              {formatRichText(c.text)}
+                            </p>
+                            {c.text.length > 200 && (
+                              <button
+                                onClick={() => toggleCommentExpand(c.id)}
+                                className="mt-1 text-[#D4AF37] font-bold text-[10px] uppercase tracking-widest hover:underline"
+                              >
+                                {expandedComments[c.id] ? 'Voir moins' : 'Voir plus'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))
@@ -497,7 +758,7 @@ const UploadDetailPage = () => {
                 </Avatar>
                 <div className="flex items-center justify-center gap-2 mb-1">
                   <h3 className="text-xl font-bold text-white">{artist?.username || artist?.name || 'Artiste Inconnu'}</h3>
-                  {artist?.is_premium && <Award className="w-5 h-5 text-[#D4AF37]" title="Certifié" />}
+                  {getBadge(artist)}
                 </div>
                 <p className="text-white/50 text-sm mb-6">{artist?.user_role || 'Artiste'}</p>
                 <Button asChild className="w-full bg-white text-black hover:bg-white/90 font-bold">

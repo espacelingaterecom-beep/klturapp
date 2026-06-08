@@ -2,21 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { User, Shield, Link as LinkIcon, Camera, Info } from 'lucide-react';
+import { User, Shield, Link as LinkIcon, Camera, Info, Bell, Trash2, AlertCircle } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
+import { useNavigate } from 'react-router-dom';
 
 const ProfileEditPage = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
 
@@ -33,6 +48,12 @@ const ProfileEditPage = () => {
       facebook: '', instagram: '', twitter: '', tiktok: '', snapchat: '', whatsapp: '',
       youtube: '', vimeo: '',
       spotify: '', apple_music: '', deezer: '', boom_music: '', amazon_music: '', soundcloud: ''
+    },
+    notifications: {
+      new_messages: true,
+      new_likes: true,
+      new_followers: true,
+      marketing_emails: false
     },
     oldPassword: '',
     password: '',
@@ -62,6 +83,12 @@ const ProfileEditPage = () => {
               facebook: '', instagram: '', twitter: '', tiktok: '', snapchat: '', whatsapp: '',
               youtube: '', vimeo: '',
               spotify: '', apple_music: '', deezer: '', boom_music: '', amazon_music: '', soundcloud: ''
+            },
+            notifications: user.notification_settings || {
+              new_messages: true,
+              new_likes: true,
+              new_followers: true,
+              marketing_emails: false
             },
             oldPassword: '',
             password: '',
@@ -136,6 +163,7 @@ const ProfileEditPage = () => {
         website: formData.website,
         user_role: formData.user_role,
         social_links: formData.socialLinks,
+        notification_settings: formData.notifications,
         updated_at: new Date().toISOString(),
       };
 
@@ -174,6 +202,36 @@ const ProfileEditPage = () => {
       toast.error(err.message || "Erreur lors de la mise à jour");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.rpc('request_account_deletion');
+
+      if (error) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            deletion_requested: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', currentUser.id);
+
+        if (updateError) throw updateError;
+      }
+
+      toast.success("Demande de suppression enregistrée. Vous allez être déconnecté.");
+      setTimeout(async () => {
+        await logout();
+        navigate('/');
+      }, 2000);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la suppression du compte");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -269,12 +327,12 @@ const ProfileEditPage = () => {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label className="text-white font-bold">Bio</Label>
-                  <span className="text-xs text-white/50">{formData.bio.length}/500</span>
+                  <span className="text-xs text-white/50">{(formData.bio || "").split(/\s+/).filter(word => word.length > 0).length}/1000 mots</span>
                 </div>
                 <Textarea 
-                  name="bio" value={formData.bio} onChange={handleInputChange} maxLength={500} rows={4} 
+                  name="bio" value={formData.bio} onChange={handleInputChange} rows={8}
                   className="bg-[#111] border-[#333] text-white focus:border-[#D4AF37] resize-none" 
-                  placeholder="Parlez-nous de votre parcours..." 
+                  placeholder="Parlez-nous de votre parcours (Max 1000 mots)..."
                 />
               </div>
             </section>
@@ -321,6 +379,45 @@ const ProfileEditPage = () => {
             {/* Security */}
             <section className="bg-[#0a0a0a] rounded-2xl border border-[#222] p-6 md:p-8">
               <h2 className="text-xl font-bold text-[#D4AF37] border-b border-[#222] pb-3 mb-6 flex items-center gap-2">
+                <Bell className="w-5 h-5" /> Notifications
+              </h2>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-white font-bold">Nouveaux Messages</Label>
+                    <p className="text-xs text-white/40">Recevoir une alerte quand on vous contacte.</p>
+                  </div>
+                  <Switch
+                    checked={formData.notifications.new_messages}
+                    onCheckedChange={(val) => setFormData(p => ({...p, notifications: {...p.notifications, new_messages: val}}))}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-white font-bold">Nouveaux Likes</Label>
+                    <p className="text-xs text-white/40">Être averti quand quelqu'un aime vos projets.</p>
+                  </div>
+                  <Switch
+                    checked={formData.notifications.new_likes}
+                    onCheckedChange={(val) => setFormData(p => ({...p, notifications: {...p.notifications, new_likes: val}}))}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-white font-bold">Nouveaux Abonnés</Label>
+                    <p className="text-xs text-white/40">Suivre la croissance de votre communauté.</p>
+                  </div>
+                  <Switch
+                    checked={formData.notifications.new_followers}
+                    onCheckedChange={(val) => setFormData(p => ({...p, notifications: {...p.notifications, new_followers: val}}))}
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Security */}
+            <section className="bg-[#0a0a0a] rounded-2xl border border-[#222] p-6 md:p-8">
+              <h2 className="text-xl font-bold text-[#D4AF37] border-b border-[#222] pb-3 mb-6 flex items-center gap-2">
                 <Shield className="w-5 h-5" /> Sécurité
               </h2>
               <p className="text-white/50 text-sm mb-4">Ne remplissez ces champs que si vous souhaitez modifier votre mot de passe.</p>
@@ -345,6 +442,50 @@ const ProfileEditPage = () => {
             <Button type="submit" disabled={isSubmitting} className="w-full h-14 bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black text-lg uppercase tracking-wider">
               {isSubmitting ? 'Enregistrement...' : 'Enregistrer les modifications'}
             </Button>
+
+            {/* Danger Zone */}
+            <section className="mt-12 bg-red-950/10 rounded-2xl border border-red-900/30 p-6 md:p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <AlertCircle className="w-6 h-6 text-red-500" />
+                <div>
+                  <h2 className="text-xl font-bold text-red-500">Zone de Danger</h2>
+                  <p className="text-xs text-white/40">Actions irréversibles concernant votre compte.</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-red-950/20 p-6 rounded-xl border border-red-900/20">
+                <div>
+                  <h3 className="text-white font-bold mb-1">Supprimer mon compte</h3>
+                  <p className="text-xs text-white/40 max-w-md">Cette action supprimera définitivement votre profil, vos morceaux et toutes vos données associées à KLTUR RAP.</p>
+                </div>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="bg-red-600 hover:bg-red-700 font-bold px-8">
+                      <Trash2 className="w-4 h-4 mr-2" /> Supprimer
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="bg-[#0a0a0a] border border-[#222] text-white">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-red-500">Attention !</AlertDialogTitle>
+                      <AlertDialogDescription className="text-white/60">
+                        Êtes-vous absolument sûr de vouloir supprimer votre compte ? Cette action est **irréversible** et toutes vos données seront perdues.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="mt-6">
+                      <AlertDialogCancel className="bg-[#111] border-[#333] text-white hover:bg-[#222]">Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteAccount}
+                        className="bg-red-600 text-white hover:bg-red-700 font-bold"
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? 'Suppression...' : 'Oui, supprimer mon compte'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </section>
           </form>
         </main>
 

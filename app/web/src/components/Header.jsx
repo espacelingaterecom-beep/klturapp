@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Award, ChevronDown, Search, Music, Users, Newspaper, Calendar, MessageSquare, Shield, WifiOff, LayoutDashboard, Plus, ShieldCheck, Trophy, Crown } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { useDebounce } from '@/hooks/use-debounce.js';
 const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, currentUser, logout } = useAuth();
+  const { isAuthenticated, currentUser, logout, unreadCount } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
   // Sécurisation des rôles
@@ -28,9 +28,12 @@ const Header = () => {
 
   const publicNavItems = [
     { name: 'Accueil', path: '/' },
+    { name: 'Musique', path: '/musique' },
+    { name: 'Live', path: '/live' },
+    { name: 'Shorts', path: '/shorts' },
     { name: 'Artistes', path: '/artistes' },
+    { name: 'Actualités', path: '/actualites' },
     { name: 'Galerie', path: '/galerie' },
-    { name: 'Équipe', path: '/equipe' },
     ...(!isUserPremium ? [{ name: 'Premium', path: '/premium' }] : [])
   ];
 
@@ -41,7 +44,7 @@ const Header = () => {
     { name: 'Messages', path: '/messages' }
   ] : [];
 
-  const navItems = [...publicNavItems, ...artistNavItems];
+  const navItems = publicNavItems;
   const isActive = (path) => location.pathname === path;
 
   useEffect(() => {
@@ -102,15 +105,28 @@ const Header = () => {
     setSearchTerm('');
   };
 
+  const getBadge = (user) => {
+    if (user?.subscription_type === 'artist_premium') {
+      return <Trophy className="w-3.5 h-3.5 text-[#D4AF37] drop-shadow-[0_0_5px_rgba(212,175,55,0.8)]" title="Artiste Élite" />;
+    }
+    if (user?.subscription_type === 'artist' || (user?.is_premium && !user?.subscription_type)) {
+      return <Award className="w-3.5 h-3.5 text-[#D4AF37]" title="Artiste Certifié" />;
+    }
+    if (user?.subscription_type === 'auditor') {
+      return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" title="Auditeur Premium" />;
+    }
+    return null;
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-[#222]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20 gap-4">
           <Link to="/" className="flex items-center gap-3 group shrink-0">
             <img
-              src="https://horizons-cdn.hostinger.com/8cb4c9c6-9962-4ccc-80b1-ea71b7a63684/866a587d484c1eedb4c3fd12c56b7757.png"
-              alt="Logo"
-              className="h-10 w-auto transition-transform duration-300 group-hover:scale-105"
+              src="/icon-only.PNG"
+              alt="KLTUR RAP Logo"
+              className="h-14 w-auto transition-transform duration-300 group-hover:scale-105 drop-shadow-[0_0_10px_rgba(212,175,55,0.3)]"
             />
             <span className="text-xl font-black text-[#D4AF37] tracking-tight hidden sm:block uppercase">
               KLTUR RAP
@@ -148,7 +164,10 @@ const Header = () => {
                             <Avatar className="h-8 w-8">
                               <AvatarFallback className="bg-[#222] text-[#D4AF37] text-xs font-bold">{artist.username?.charAt(0) || 'A'}</AvatarFallback>
                             </Avatar>
-                            <span className="text-sm font-bold text-white group-hover:text-[#D4AF37]">{artist.username || artist.name}</span>
+                            <span className="text-sm font-bold text-white group-hover:text-[#D4AF37] flex items-center gap-1.5">
+                              {artist.username || artist.name}
+                              {getBadge(artist)}
+                            </span>
                           </Link>
                         ))}
                       </div>
@@ -180,13 +199,18 @@ const Header = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`text-sm font-bold uppercase transition-all duration-300 ${
+                className={`text-sm font-bold uppercase transition-all duration-300 flex items-center gap-2 ${
                   isActive(item.path)
                     ? 'text-[#D4AF37] gold-glow-text'
                     : 'text-white hover:text-[#D4AF37]'
                 }`}
               >
                 {item.name}
+                {item.name === 'Messages' && unreadCount > 0 && (
+                  <span className="bg-red-600 text-white text-[9px] h-4 w-4 flex items-center justify-center rounded-full animate-pulse">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
@@ -207,25 +231,64 @@ const Header = () => {
                   </Avatar>
                   <ChevronDown className="h-4 w-4 text-white/50 group-hover:text-white" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-[#111] border-[#333] text-white rounded-xl">
+                <DropdownMenuContent align="end" className="w-56 bg-[#0a0a0a] border-[#222] text-white rounded-xl shadow-2xl">
                   {isAdmin && (
-                    <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-[#D4AF37]">
+                    <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-[#D4AF37]">
                       <Link to="/admin" className="flex items-center gap-2 font-bold text-[#D4AF37]">
                         <Shield className="h-4 w-4" /> Administration
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-white">
+
+                  {isAuthenticated && (
+                    <>
+                      <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                        <Link to="/dashboard" className="flex items-center gap-2 font-medium">
+                          <LayoutDashboard className="h-4 w-4 text-[#D4AF37]" /> Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                        <Link to="/creer-post" className="flex items-center gap-2 font-medium">
+                          <Plus className="h-4 w-4 text-[#D4AF37]" /> Publier
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                        <Link to="/upload" className="flex items-center gap-2 font-medium">
+                          <Music className="h-4 w-4 text-[#D4AF37]" /> Télécharger
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                        <Link to="/messages" className="flex items-center justify-between w-full font-medium">
+                          <div className="flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4 text-[#D4AF37]" /> Messages
+                          </div>
+                          {unreadCount > 0 && (
+                            <span className="bg-red-600 text-white text-[9px] h-4 w-4 flex items-center justify-center rounded-full">
+                              {unreadCount}
+                            </span>
+                          )}
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-[#222]" />
+                    </>
+                  )}
+
+                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
                     <Link to={currentUser?.id ? `/profil/${currentUser.id}` : '#'} className="flex items-center gap-2 font-medium">
                       <User className="h-4 w-4" /> Mon Profil
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#222] focus:text-white">
+                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
                     <Link to="/modifier-profil" className="flex items-center gap-2 font-medium">
                       <Settings className="h-4 w-4" /> Paramètres
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-[#333]" />
+                  <DropdownMenuItem asChild className="cursor-pointer focus:bg-[#111] focus:text-white">
+                    <Link to="/ma-musique" className="flex items-center gap-2 font-medium">
+                      <WifiOff className="h-4 w-4" /> Mode Hors ligne
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-[#222]" />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer focus:bg-red-900/20 focus:text-red-400 text-red-400 font-bold">
                     <LogOut className="h-4 w-4 mr-2" /> Déconnexion
                   </DropdownMenuItem>
@@ -242,10 +305,67 @@ const Header = () => {
             <SheetContent side="right" className="bg-[#0a0a0a] border-l border-[#222] text-white">
               <SheetTitle className="text-[#D4AF37] font-black uppercase text-left mb-8 border-b border-[#222] pb-4">Menu</SheetTitle>
               <div className="flex flex-col gap-6">
-                {navItems.map((item) => (
-                  <Link key={item.path} to={item.path} onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase">{item.name}</Link>
-                ))}
-                {isAdmin && <Link to="/admin" onClick={() => setIsOpen(false)} className="text-[#D4AF37] font-bold uppercase flex items-center gap-2"><Shield className="w-5 h-5"/> Administration</Link>}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Navigation</p>
+                  <div className="flex flex-col gap-4">
+                    {navItems.map((item) => (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setIsOpen(false)}
+                        className="text-lg font-bold uppercase flex items-center justify-between"
+                      >
+                        {item.name}
+                        {item.name === 'Messages' && unreadCount > 0 && (
+                          <span className="bg-red-600 text-white text-[10px] h-5 w-5 flex items-center justify-center rounded-full animate-pulse">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                    {isAdmin && <Link to="/admin" onClick={() => setIsOpen(false)} className="text-[#D4AF37] font-bold uppercase flex items-center gap-2"><Shield className="w-5 h-5"/> Administration</Link>}
+                  </div>
+                </div>
+
+                {isAuthenticated && (
+                  <div className="pt-6 border-t border-[#222] space-y-4">
+                    <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Mon Compte</p>
+                    <div className="flex flex-col gap-4">
+                      <Link to="/dashboard" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <LayoutDashboard className="w-5 h-5 text-[#D4AF37]" /> Dashboard
+                      </Link>
+                      <Link to="/creer-post" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <Plus className="w-5 h-5 text-[#D4AF37]" /> Publier
+                      </Link>
+                      <Link to="/upload" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <Music className="w-5 h-5 text-[#D4AF37]" /> Télécharger
+                      </Link>
+                      <Link to="/messages" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <MessageSquare className="w-5 h-5 text-[#D4AF37]" /> Messages
+                        </div>
+                        {unreadCount > 0 && (
+                          <span className="bg-red-600 text-white text-[10px] h-5 w-5 flex items-center justify-center rounded-full">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </Link>
+                      <DropdownMenuSeparator className="bg-[#222] opacity-50" />
+                      <Link to={`/profil/${currentUser?.id}`} onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <User className="w-5 h-5 text-[#D4AF37]" /> Mon Profil
+                      </Link>
+                      <Link to="/modifier-profil" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <Settings className="w-5 h-5 text-[#D4AF37]" /> Paramètres
+                      </Link>
+                      <Link to="/ma-musique" onClick={() => setIsOpen(false)} className="text-lg font-bold uppercase flex items-center gap-3">
+                        <WifiOff className="w-5 h-5 text-[#D4AF37]" /> Hors ligne
+                      </Link>
+                      <button onClick={() => { handleLogout(); setIsOpen(false); }} className="text-lg font-bold uppercase flex items-center gap-3 text-red-500 text-left">
+                        <LogOut className="w-5 h-5" /> Déconnexion
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </SheetContent>
           </Sheet>

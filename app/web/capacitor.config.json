@@ -1,15 +1,22 @@
 {
   "appId": "com.klturrap.app",
   "appName": "KLTUR RAP",
-  "webDir":"../../dist/apps/web",
+  "webDir": "dist",
   "bundledWebRuntime": false,
   "plugins": {
+    "GoogleAuth": {
+      "scopes": ["profile", "email"],
+      "serverClientId": "786105872365-b1jh0cl8hqo413kckjnv3jthva96rvqr.apps.googleusercontent.com",
+      "forceCodeForRefreshToken": true
+    },
     "SplashScreen": {
-      "launchShowDuration": 3000,
+      "launchShowDuration": 2000,
       "launchAutoHide": true,
+      "launchFadeOutDuration": 500,
       "backgroundColor": "#000000",
       "androidScaleType": "CENTER_CROP",
-      "showSpinner": false,
+      "showSpinner": true,
+      "spinnerColor": "#D4AF37",
       "splashFullScreen": true,
       "splashImmersive": true
     },

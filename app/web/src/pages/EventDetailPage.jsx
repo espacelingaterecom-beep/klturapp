@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, Award, Share2, Facebook, Twitter, ChevronLeft, Users, Clock, Info } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Calendar, MapPin, Award, ChevronLeft, Share2, Facebook, Twitter, Users, Clock, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -13,6 +13,7 @@ import LoginPromptModal from '@/components/LoginPromptModal.jsx';
 import EventRegistrationModal from '@/components/EventRegistrationModal.jsx';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
+import { motion } from 'framer-motion';
 
 const EventDetailPage = () => {
   const { id } = useParams();
@@ -23,6 +24,7 @@ const EventDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showRegModal, setShowRegModal] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
 
   const getFileUrl = (bucket, path) => {
     if (!path) return '';
@@ -41,15 +43,7 @@ const EventDetailPage = () => {
           .single();
 
         if (error) throw error;
-
-        // Map data
-        const mappedEvent = {
-          ...data,
-          expand: {
-            organizerId: data.profiles
-          }
-        };
-        setEvent(mappedEvent);
+        setEvent(data);
       } catch (err) {
         console.error(err);
         toast.error('Événement introuvable.');
@@ -58,20 +52,11 @@ const EventDetailPage = () => {
       }
     };
     fetchEvent();
-    window.scrollTo(0, 0);
   }, [id]);
-
-  const handleRegisterClick = () => {
-    if (!isAuthenticated) {
-      setShowLoginPrompt(true);
-    } else {
-      setShowRegModal(true);
-    }
-  };
 
   const handleShare = (platform) => {
     const url = encodeURIComponent(window.location.href);
-    const text = encodeURIComponent(`Ne manquez pas "${event?.title}" sur KLTUR RAP !`);
+    const text = encodeURIComponent(`Rejoignez-moi à l'événement "${event?.title}" sur KLTUR RAP !`);
     if (platform === 'facebook') window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
     if (platform === 'twitter') window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
     if (platform === 'copy') {
@@ -80,184 +65,189 @@ const EventDetailPage = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex flex-col">
-        <Header />
-        <main className="flex-grow py-12 px-4 max-w-7xl mx-auto w-full">
-          <Skeleton className="h-[600px] w-full bg-[#111] rounded-2xl"/>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
+  const handleAddToCalendar = () => {
+    if (!event) return;
 
-  if (!event) return (
-    <div className="min-h-screen bg-[#050505] flex flex-col">
-      <Header />
-      <div className="flex-grow flex flex-col items-center justify-center text-center p-4">
-        <Info className="w-16 h-16 text-white/20 mb-4" />
-        <h2 className="text-2xl font-bold text-white mb-2">Événement introuvable</h2>
-        <p className="text-white/50 mb-8">Cet événement n'existe pas ou a été supprimé.</p>
-        <Button asChild className="bg-[#D4AF37] text-black hover:bg-[#b5952f]">
-          <Link to="/evenements">Retour aux événements</Link>
-        </Button>
-      </div>
-      <Footer />
-    </div>
-  );
+    const title = encodeURIComponent(event.title);
+    const description = encodeURIComponent(event.description || '');
+    const location = encodeURIComponent(event.location || '');
 
-  const organizer = event.expand?.organizerId;
-  const eventDate = new Date(event.date);
+    // Format date for Google Calendar: YYYYMMDDTHHMMSSZ
+    const startDate = new Date(event.date);
+    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // Default duration 2 hours
+
+    const formatCalDate = (date) => date.toISOString().replace(/-|:|\.\d+/g, '');
+
+    const googleUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${description}&location=${location}&dates=${formatCalDate(startDate)}/${formatCalDate(endDate)}`;
+
+    window.open(googleUrl, '_blank');
+    toast.success("Redirection vers Google Calendar...");
+  };
+
+  if (loading) return <div className="min-h-screen bg-[#050505] flex flex-col"><Header /><main className="flex-grow py-12 px-4 max-w-7xl mx-auto w-full"><Skeleton className="h-[500px] w-full bg-[#111] rounded-3xl"/></main><Footer /></div>;
+  if (!event) return <div className="min-h-screen bg-[#050505] flex flex-col"><Header /><div className="text-white text-center py-20 flex-grow">Événement introuvable</div><Footer /></div>;
+
+  const organizer = event.profiles;
 
   return (
     <>
       <Helmet>
-        <title>{event.title} - Événements - KLTUR RAP</title>
+        <title>{event.title} - Événement KLTUR RAP</title>
       </Helmet>
 
       <LoginPromptModal isOpen={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
-      {showRegModal && <EventRegistrationModal isOpen={showRegModal} onClose={() => setShowRegModal(false)} event={event} />}
+      <EventRegistrationModal isOpen={showRegModal} onClose={() => setShowRegModal(false)} event={event} />
 
       <div className="min-h-screen flex flex-col bg-[#050505]">
         <Header />
 
-        <main className="flex-grow py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
-          <Link to="/evenements" className="inline-flex items-center text-white/50 hover:text-[#D4AF37] mb-8 transition-colors group">
-            <ChevronLeft className="w-5 h-5 mr-1 group-hover:-translate-x-1 transition-transform" /> Retour à la liste
-          </Link>
+        <main className="flex-grow py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-white/50 hover:text-[#D4AF37] mb-8 transition-colors font-bold uppercase text-xs tracking-widest">
+            <ChevronLeft className="w-4 h-4" /> Retour aux événements
+          </button>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-
-            {/* Left Column: Image & Main Info */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Main Content */}
             <div className="lg:col-span-2 space-y-8">
-              <div className="relative rounded-3xl overflow-hidden border border-[#222] bg-[#0a0a0a] shadow-2xl">
-                <img
-                  src={getFileUrl('covers', event.image || event.image_url)}
-                  alt={event.title}
-                  className="w-full aspect-video object-cover"
-                />
-                <div className="absolute top-6 left-6 bg-[#D4AF37] text-black text-sm font-black uppercase tracking-widest px-4 py-2 rounded-xl shadow-lg">
-                  {event.event_type || 'Événement'}
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white leading-tight uppercase tracking-tight">
-                  {event.title}
-                </h1>
-
-                <div className="flex flex-wrap gap-6 items-center py-6 border-y border-[#222]">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-[#111] rounded-2xl border border-[#222] text-[#D4AF37]">
-                      <Calendar className="w-6 h-6" />
+              <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] overflow-hidden shadow-2xl">
+                {/* Hero Image */}
+                <div className="aspect-video relative overflow-hidden bg-[#111]">
+                  {event.image ? (
+                    <img
+                      src={getFileUrl('covers', event.image)}
+                      alt={event.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/10">
+                      <Calendar className="w-24 h-24" />
                     </div>
-                    <div>
-                      <p className="text-white/40 text-[10px] font-black uppercase tracking-widest">Date</p>
-                      <p className="text-white font-bold">{eventDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-[#111] rounded-2xl border border-[#222] text-[#D4AF37]">
-                      <Clock className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-white/40 text-[10px] font-black uppercase tracking-widest">Heure</p>
-                      <p className="text-white font-bold">{event.time || eventDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-[#111] rounded-2xl border border-[#222] text-[#D4AF37]">
-                      <MapPin className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-white/40 text-[10px] font-black uppercase tracking-widest">Lieu</p>
-                      <p className="text-white font-bold">{event.location}</p>
-                    </div>
+                  )}
+                  <div className="absolute top-6 left-6 bg-[#D4AF37] text-black px-4 py-1.5 rounded-full font-black uppercase text-xs tracking-wider shadow-lg">
+                    {event.event_type || 'Événement'}
                   </div>
                 </div>
 
-                <div className="prose prose-invert max-w-none">
-                  <h3 className="text-xl font-bold text-white mb-4">À propos de cet événement</h3>
-                  <p className="text-white/70 text-lg leading-relaxed whitespace-pre-wrap">
-                    {event.description || "Aucune description détaillée n'est disponible pour cet événement."}
-                  </p>
-                </div>
-              </div>
-            </div>
+                {/* Content */}
+                <div className="p-8 md:p-12">
+                  <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight mb-6 leading-none">
+                    {event.title}
+                  </h1>
 
-            {/* Right Column: Sidebar / Actions */}
-            <div className="space-y-8">
-              <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] p-8 space-y-8 sticky top-24">
-                <div className="space-y-4">
-                  <Button
-                    onClick={handleRegisterClick}
-                    className="w-full h-16 bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black text-lg uppercase tracking-wider rounded-2xl gold-glow"
-                  >
-                    Je m'inscris
-                  </Button>
-                  <p className="text-center text-[10px] text-white/40 font-bold uppercase tracking-widest">Inscription gratuite et rapide</p>
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                    <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="w-10 h-10 rounded-xl bg-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37] shrink-0">
+                        <Calendar className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-white/30 tracking-widest mb-1">Date</p>
+                        <p className="text-white font-bold">{new Date(event.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="w-10 h-10 rounded-xl bg-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37] shrink-0">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-white/30 tracking-widest mb-1">Lieu</p>
+                        <p className="text-white font-bold">{event.location}</p>
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="pt-8 border-t border-[#222]">
-                  <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-4">Organisé par</p>
-                  <Link to={`/profil/${organizer?.id}`} className="flex items-center gap-4 group">
-                    <Avatar className="w-14 h-14 border-2 border-[#222] group-hover:border-[#D4AF37]/50 transition-all">
-                      <AvatarImage src={organizer?.avatar ? getFileUrl('avatars', organizer.avatar) : getFileUrl('avatars', organizer?.profilePhoto)} />
-                      <AvatarFallback className="bg-[#111] text-[#D4AF37] font-black uppercase">
-                        {organizer?.username?.charAt(0) || organizer?.name?.charAt(0) || 'O'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-white font-black uppercase group-hover:text-[#D4AF37] transition-colors flex items-center gap-1.5">
-                        {organizer?.username || organizer?.name || 'Organisateur'}
-                        {organizer?.is_premium && <Award className="w-4 h-4 fill-[#D4AF37] text-[#D4AF37]" />}
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Info className="w-5 h-5 text-[#D4AF37]" /> À propos de l'événement
+                    </h3>
+                    <div className="relative">
+                      <p className={`text-white/70 leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isDescExpanded ? 'line-clamp-6' : ''}`}>
+                        {event.description || "Aucune description détaillée fournie pour cet événement."}
                       </p>
-                      <p className="text-xs text-white/40 font-bold uppercase tracking-widest">{organizer?.user_role || 'Artiste / Organisateur'}</p>
+                      {event.description && event.description.length > 350 && (
+                        <button
+                          onClick={() => setIsDescExpanded(!isDescExpanded)}
+                          className="mt-3 text-[#D4AF37] font-black text-[10px] uppercase tracking-widest hover:underline"
+                        >
+                          {isDescExpanded ? 'Voir moins' : 'Lire la suite'}
+                        </button>
+                      )}
                     </div>
-                  </Link>
-                </div>
-
-                <div className="pt-8 border-t border-[#222] grid grid-cols-2 gap-4">
-                  <div className="bg-[#111] p-4 rounded-2xl border border-[#222] text-center">
-                    <Users className="w-5 h-5 mx-auto mb-2 text-white/20" />
-                    <p className="text-lg font-black text-white">Public</p>
-                    <p className="text-[10px] text-white/40 uppercase font-bold tracking-tighter">Accessibilité</p>
-                  </div>
-                  <div className="bg-[#111] p-4 rounded-2xl border border-[#222] text-center">
-                    <Award className="w-5 h-5 mx-auto mb-2 text-white/20" />
-                    <p className="text-lg font-black text-white">Certifié</p>
-                    <p className="text-[10px] text-white/40 uppercase font-bold tracking-tighter">KLTUR RAP</p>
                   </div>
                 </div>
 
-                <div className="pt-8 border-t border-[#222]">
-                  <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-4">Partager l'événement</p>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => handleShare('facebook')} className="flex-1 bg-transparent border-[#222] hover:bg-blue-600 hover:border-blue-600 group">
-                      <Facebook className="w-5 h-5 text-white" />
-                    </Button>
-                    <Button variant="outline" onClick={() => handleShare('twitter')} className="flex-1 bg-transparent border-[#222] hover:bg-sky-500 hover:border-sky-500 group">
-                      <Twitter className="w-5 h-5 text-white" />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="flex-1 bg-transparent border-[#222] hover:border-[#D4AF37] hover:text-[#D4AF37]">
-                          <Share2 className="w-5 h-5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="bg-[#111] border-[#333] text-white">
-                        <DropdownMenuItem onClick={() => handleShare('copy')} className="cursor-pointer">Copier le lien</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this event: ' + window.location.href)}`, '_blank')} className="cursor-pointer">WhatsApp</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                <div className="p-6 bg-[#111] border-t border-[#222] flex flex-col sm:flex-row items-center justify-between gap-4">
+                   <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                      <Button
+                        onClick={() => isAuthenticated ? setShowRegModal(true) : setShowLoginPrompt(true)}
+                        className="w-full sm:w-auto bg-[#D4AF37] text-black hover:bg-[#b5952f] font-black uppercase px-8 h-12 rounded-xl shadow-lg"
+                      >
+                        Participer à l'événement
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleAddToCalendar}
+                        className="w-full sm:w-auto border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black font-bold h-12 rounded-xl"
+                      >
+                        Ajouter au calendrier
+                      </Button>
+                   </div>
+
+                   <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="text-white/60 hover:text-white font-bold">
+                        <Share2 className="w-5 h-5 mr-2" /> Partager
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="bg-[#111] border-[#222] text-white">
+                      <DropdownMenuItem onClick={() => handleShare('facebook')} className="cursor-pointer"><Facebook className="w-4 h-4 mr-2"/> Facebook</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleShare('twitter')} className="cursor-pointer"><Twitter className="w-4 h-4 mr-2"/> Twitter</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleShare('copy')} className="cursor-pointer font-bold text-[#D4AF37]">Copier le lien</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>
 
+            {/* Sidebar */}
+            <div className="space-y-8">
+              {/* Organizer Card */}
+              <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] p-8 text-center shadow-xl">
+                <p className="text-[10px] font-black uppercase text-white/30 tracking-[0.2em] mb-6">Organisé par</p>
+                <Avatar className="w-24 h-24 mx-auto mb-4 border-4 border-[#111] shadow-2xl">
+                  <AvatarImage src={getFileUrl('avatars', organizer?.avatar || organizer?.profilePhoto)} />
+                  <AvatarFallback className="bg-[#111] text-[#D4AF37] text-2xl font-bold">{organizer?.username?.charAt(0) || 'A'}</AvatarFallback>
+                </Avatar>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <h3 className="text-xl font-bold text-white uppercase">{organizer?.username || organizer?.name || 'KLTUR RAP'}</h3>
+                  {organizer?.is_premium && <Award className="w-5 h-5 text-[#D4AF37]" title="Certifié" />}
+                </div>
+                <p className="text-[#D4AF37] font-bold text-xs uppercase tracking-widest mb-8">{organizer?.user_role || 'Staff'}</p>
+
+                <Button asChild variant="outline" className="w-full border-[#222] text-white hover:bg-white hover:text-black font-bold h-12 rounded-xl transition-all">
+                  <Link to={`/profil/${organizer?.id}`}>Voir le profil</Link>
+                </Button>
+              </div>
+
+              {/* Event Stats */}
+              <div className="bg-[#0a0a0a] rounded-3xl border border-[#222] p-8 shadow-xl">
+                 <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-3 text-white/60">
+                          <Users className="w-5 h-5 text-[#D4AF37]" />
+                          <span className="text-sm font-bold uppercase tracking-wider">Inscrits</span>
+                       </div>
+                       <span className="text-white font-black">124</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-3 text-white/60">
+                          <Clock className="w-5 h-5 text-[#D4AF37]" />
+                          <span className="text-sm font-bold uppercase tracking-wider">Statut</span>
+                       </div>
+                       <span className="text-green-500 font-black uppercase text-[10px] bg-green-500/10 px-2 py-1 rounded border border-green-500/20">Ouvert</span>
+                    </div>
+                 </div>
+              </div>
+            </div>
           </div>
         </main>
 
