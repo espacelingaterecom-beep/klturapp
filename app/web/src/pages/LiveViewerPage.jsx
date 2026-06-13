@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
-import Peer from 'peerjs';
+import { Peer } from 'peerjs';
 
 const LiveViewerPage = () => {
   const { id } = useParams();

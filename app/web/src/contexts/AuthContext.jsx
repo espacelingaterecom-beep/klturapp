@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, subscribeNotifications, fetchUnreadCount } from '@/lib/supabaseClient.js';
-import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+// import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { toast } from 'sonner';
@@ -186,6 +186,7 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithGoogle = async () => {
     try {
+      /*
       if (Capacitor.isNativePlatform()) {
         // Flux natif (Android/iOS)
         const user = await GoogleAuth.signIn();
@@ -196,6 +197,7 @@ export const AuthProvider = ({ children }) => {
         if (error) throw error;
         return data;
       } else {
+      */
         // Flux Web classique
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -205,7 +207,7 @@ export const AuthProvider = ({ children }) => {
         });
         if (error) throw error;
         return data;
-      }
+      // }
     } catch (error) {
       console.error("Google Login Error:", error);
       throw error;

@@ -13,7 +13,7 @@ import { supabase, subscribeChat, subscribePresence, markConversationRead, getPu
 import { toast } from 'sonner';
 
 const MessagesPage = () => {
-  const { currentUser, fetchUnreadCount } = useAuth();
+  const { currentUser, fetchUnreadCount, unreadCount: globalUnreadCount } = useAuth();
   const { startCall } = useCall();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
@@ -21,32 +21,95 @@ const MessagesPage = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState({});
+
+  const fetchConvs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*, p1:participant1_id(*), p2:participant2_id(*)')
+        .or(`participant1_id.eq.${currentUser.id},participant2_id.eq.${currentUser.id}`)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Fetch unread counts for all conversations
+      const { data: unreadData } = await supabase
+        .from('messages')
+        .select('conversation_id')
+        .eq('recipient_id', currentUser.id)
+        .eq('is_read', false);
+
+      const counts = {};
+      (unreadData || []).forEach(msg => {
+        counts[msg.conversation_id] = (counts[msg.conversation_id] || 0) + 1;
+      });
+      setUnreadCounts(counts);
+
+      const mapped = (data || []).map(conv => ({
+        ...conv,
+        expand: {
+          participant1Id: conv.p1,
+          participant2Id: conv.p2
+        }
+      }));
+      setConversations(mapped);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
-    const fetchConvs = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('conversations')
-          .select('*, p1:participant1_id(*), p2:participant2_id(*)')
-          .or(`participant1_id.eq.${currentUser.id},participant2_id.eq.${currentUser.id}`)
-          .order('updated_at', { ascending: false });
-
-        if (error) throw error;
-
-        const mapped = (data || []).map(conv => ({
-          ...conv,
-          expand: {
-            participant1Id: conv.p1,
-            participant2Id: conv.p2
-          }
-        }));
-        setConversations(mapped);
-      } catch (err) {
-        console.error(err);
-      }
-    };
     if (currentUser) fetchConvs();
   }, [currentUser]);
+
+  // Listen for ALL messages for this user to update the list in real-time
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const channel = supabase
+      .channel(`user:${currentUser.id}:list-updates`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `recipient_id=eq.${currentUser.id}`
+      }, (payload) => {
+        const msg = payload.new;
+        // Update unread counts
+        if (activeConv?.id !== msg.conversation_id) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1
+          }));
+        }
+
+        // Refresh the whole list to update last_message and order
+        fetchConvs();
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `sender_id=eq.${currentUser.id}`
+      }, () => {
+        // Refresh when I send a message too
+        fetchConvs();
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'conversations',
+      }, () => {
+        // Refresh whenever a conversation is updated (new last_message)
+        fetchConvs();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, activeConv?.id]);
 
   useEffect(() => {
     if (!activeConv) return;
@@ -63,6 +126,7 @@ const MessagesPage = () => {
 
         // Marquer la conversation comme lue
         await markConversationRead(activeConv.id, currentUser.id);
+        setUnreadCounts(prev => ({ ...prev, [activeConv.id]: 0 }));
         await fetchUnreadCount(currentUser.id);
       } catch (err) {
         console.error(err);
@@ -77,6 +141,7 @@ const MessagesPage = () => {
       // Si on reçoit un message dans la conversation active, on le marque comme lu
       if (newMessage.recipient_id === currentUser.id) {
         await markConversationRead(activeConv.id, currentUser.id);
+        setUnreadCounts(prev => ({ ...prev, [activeConv.id]: 0 }));
         await fetchUnreadCount(currentUser.id);
       }
     });
@@ -183,8 +248,9 @@ const MessagesPage = () => {
                   <div className="divide-y divide-[#222]">
                     {conversations.map(conv => {
                       const otherUser = conv.expand?.participant1Id?.id === currentUser.id ? conv.expand?.participant2Id : conv.expand?.participant1Id;
+                      const unreadCount = unreadCounts[conv.id] || 0;
                       return (
-                        <div key={conv.id} onClick={() => setActiveConv(conv)} className="p-5 cursor-pointer hover:bg-[#111] transition-all flex items-center gap-4 group">
+                        <div key={conv.id} onClick={() => setActiveConv(conv)} className="p-5 cursor-pointer hover:bg-[#111] transition-all flex items-center gap-4 group relative">
                           <div className="relative">
                             <Avatar className="h-14 w-14 border-2 border-[#222] group-hover:border-[#D4AF37]/50 transition-colors">
                               <AvatarImage src={getPublicImageUrl('avatars', otherUser?.avatar)} />
@@ -198,12 +264,19 @@ const MessagesPage = () => {
                           </div>
                           <div className="flex-grow overflow-hidden">
                             <div className="flex justify-between items-center mb-1">
-                              <h4 className="font-black text-white text-base group-hover:text-[#D4AF37] transition-colors truncate">{otherUser?.username || otherUser?.name}</h4>
+                              <h4 className={`font-black text-white text-base group-hover:text-[#D4AF37] transition-colors truncate ${unreadCount > 0 ? 'text-[#D4AF37]' : ''}`}>{otherUser?.username || otherUser?.name}</h4>
                               <span className="text-[10px] font-bold text-white/30 uppercase">{new Date(conv.last_message_date || conv.updated_at).toLocaleDateString()}</span>
                             </div>
-                            <p className="text-sm text-white/50 truncate font-medium">{conv.last_message || 'Nouvelle conversation...'}</p>
+                            <p className={`text-sm truncate font-medium ${unreadCount > 0 ? 'text-white' : 'text-white/50'}`}>{conv.last_message || 'Nouvelle conversation...'}</p>
                           </div>
-                          <ChevronRight className="w-5 h-5 text-white/10 group-hover:text-[#D4AF37] transition-all" />
+                          <div className="flex flex-col items-end gap-2">
+                            {unreadCount > 0 && (
+                              <span className="bg-[#D4AF37] text-black text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center shadow-lg gold-glow">
+                                {unreadCount}
+                              </span>
+                            )}
+                            <ChevronRight className="w-5 h-5 text-white/10 group-hover:text-[#D4AF37] transition-all" />
+                          </div>
                         </div>
                       );
                     })}

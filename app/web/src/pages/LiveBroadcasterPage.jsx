@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
-import Peer from 'peerjs';
+import { Peer } from 'peerjs';
 
 const LiveBroadcasterPage = () => {
   const { id } = useParams();
@@ -47,6 +47,10 @@ const LiveBroadcasterPage = () => {
         }
 
         // Get Camera/Mic
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("Votre navigateur ne supporte pas l'accès à la caméra ou au micro. Assurez-vous d'utiliser HTTPS ou localhost.");
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
