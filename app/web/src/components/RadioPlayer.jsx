@@ -3,13 +3,19 @@ import { Play, Pause, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { useAudio } from '@/contexts/AudioContext.jsx';
+import { toast } from 'sonner';
 
-const RadioPlayer = ({ show }) => {
+const RadioPlayer = ({ show, liveUrl }) => {
   const { currentTrack, isPlaying, togglePlay, progress, duration, seek, playTrack } = useAudio();
 
   const isCurrentShow = currentTrack?.id === 'radio-live';
 
   const handleToggle = () => {
+    if (!liveUrl) {
+      toast.error("Le flux en direct n'est pas encore configuré.");
+      return;
+    }
+
     if (isCurrentShow) {
       togglePlay();
     } else {
@@ -17,7 +23,7 @@ const RadioPlayer = ({ show }) => {
         id: 'radio-live',
         title: show.title,
         artist: 'KLTUR RAP LIVE',
-        url: 'https://stream.radio.co/s8a6a6e2e2/listen', // URL de test ou live
+        url: liveUrl,
         cover: 'https://horizons-cdn.hostinger.com/8cb4c9c6-9962-4ccc-80b1-ea71b7a63684/866a587d484c1eedb4c3fd12c56b7757.png'
       });
     }

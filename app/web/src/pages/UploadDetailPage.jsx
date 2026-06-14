@@ -432,7 +432,7 @@ const UploadDetailPage = () => {
   if (!upload) return <div className="min-h-screen bg-[#050505]"><Header /><div className="text-white text-center py-20">Introuvable</div><Footer /></div>;
 
   const artist = upload.expand?.userId;
-  const isVideo = upload.type === 'Music Video' && upload.file_path;
+  const isVideo = (upload.type === 'Music Video' || upload.type === 'Short') && upload.file_path;
   const mediaUrl = isVideo ? getFileUrl('uploads', upload.file_path) : getFileUrl('uploads', upload.file_path);
   const isOwner = currentUser?.id === artist?.id;
 

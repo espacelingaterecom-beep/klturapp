@@ -41,6 +41,7 @@ const AdminDashboard = () => {
     userGrowth: [],
     contentDistribution: []
   });
+  const [radioLiveUrl, setRadioLiveUrl] = useState('');
 
   // Form states
   const [newEvent, setNewEvent] = useState({ title: '', date: '', location: '', event_type: 'Concert', description: '' });
@@ -148,6 +149,14 @@ const AdminDashboard = () => {
       // 1. Fetch Events
       const { data: evs, error: eErr } = await supabase.from('events').select('*').order('date', { ascending: true });
       if (!eErr) setEvents(evs || []);
+
+      // Fetch Radio Live Setting
+      const { data: settings } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('id', 'radio_live')
+        .maybeSingle();
+      if (settings) setRadioLiveUrl(settings.value);
 
       // 2. Fetch Users
       const { data: usrs, error: uErr } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -351,14 +360,11 @@ const AdminDashboard = () => {
 
   const handleUpdateRadioSettings = async (e) => {
     e.preventDefault();
-    const liveUrl = e.target.liveUrl.value;
-    if (!liveUrl) return;
-
     const loadingToast = toast.loading("Mise à jour du direct...");
     try {
       const { error } = await supabase
         .from('platform_settings')
-        .upsert({ id: 'radio_live', value: liveUrl }, { onConflict: 'id' });
+        .upsert({ id: 'radio_live', value: radioLiveUrl }, { onConflict: 'id' });
 
       if (error) throw error;
       toast.success("Le lien de la radio en direct a été mis à jour !", { id: loadingToast });
@@ -1613,7 +1619,14 @@ const AdminDashboard = () => {
                   <form onSubmit={handleUpdateRadioSettings} className="space-y-6">
                     <div className="space-y-2">
                       <Label className="text-xs font-black uppercase text-white/60">Lien du flux (Icecast/Radio.co/YouTube)</Label>
-                      <Input name="liveUrl" className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]" placeholder="https://stream.radio.co/..." required />
+                      <Input
+                        name="liveUrl"
+                        type="text"
+                        value={radioLiveUrl}
+                        onChange={(e) => setRadioLiveUrl(e.target.value)}
+                        className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]"
+                        placeholder="Collez ici n'importe quel lien (flux direct, YouTube, etc.)"
+                      />
                     </div>
                     <Button type="submit" className="w-full bg-[#D4AF37] text-black font-black uppercase h-12 rounded-xl">Mettre à jour le direct</Button>
                   </form>

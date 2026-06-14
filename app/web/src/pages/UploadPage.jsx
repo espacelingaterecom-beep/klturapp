@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext.jsx';
-import { supabase } from '@/lib/supabaseClient.js';
+import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { formatRichText } from '@/lib/textFormatter.jsx';
 
 const UploadPage = () => {
@@ -230,7 +230,7 @@ const UploadPage = () => {
       if (mediaFile) {
         const ext = mediaFile.name.split('.').pop();
         const fileName = `${currentUser.id}/${Date.now()}_file.${ext}`;
-        const bucket = formData.type === 'Short' ? 'shorts' : 'uploads';
+        const bucket = 'uploads'; // Utilisation du bucket principal existant
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from(bucket)
           .upload(fileName, mediaFile);
@@ -241,15 +241,34 @@ const UploadPage = () => {
 
       // 2. Database Record
       if (formData.type === 'Short') {
-        const { error } = await supabase
+        const { data: shortData, error } = await supabase
           .from('shorts')
           .insert([{
             user_id: currentUser.id,
-            video_url: getPublicImageUrl('shorts', filePath),
+            video_url: getPublicImageUrl('uploads', filePath), // Changé de 'shorts' à 'uploads'
             caption: formData.description,
             title: formData.title
-          }]);
+          }])
+          .select()
+          .single();
+
         if (error) throw error;
+
+        // Créer aussi une entrée dans uploads pour que ça apparaisse dans le dashboard
+        await supabase
+          .from('uploads')
+          .insert([{
+            user_id: currentUser.id,
+            title: formData.title,
+            description: formData.description,
+            type: 'Short',
+            genre: formData.genre,
+            file_path: filePath,
+            cover_art: coverArtPath,
+            release_date: new Date(formData.releaseDate).toISOString(),
+            is_explicit: formData.isExplicit
+          }]);
+
         toast.success('Short publié avec succès !');
         navigate('/shorts');
         return;

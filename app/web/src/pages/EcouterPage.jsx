@@ -15,25 +15,27 @@ const EcouterPage = () => {
   const { playTrack } = useAudio();
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [liveUrl, setLiveUrl] = useState(null);
   const show = radioShows[0];
 
   useEffect(() => {
-    const fetchEpisodes = async () => {
+    const fetchData = async () => {
       try {
-        const { data, error } = await supabase
-          .from('radio_episodes')
-          .select('*')
-          .order('created_at', { ascending: false });
+        const [episodesRes, liveRes] = await Promise.all([
+          supabase.from('radio_episodes').select('*').order('created_at', { ascending: false }),
+          supabase.from('platform_settings').select('value').eq('id', 'radio_live').maybeSingle()
+        ]);
 
-        if (error) throw error;
-        setEpisodes(data || []);
+        if (episodesRes.error) throw episodesRes.error;
+        setEpisodes(episodesRes.data || []);
+        if (liveRes.data) setLiveUrl(liveRes.data.value);
       } catch (err) {
-        console.error("Error fetching episodes:", err);
+        console.error("Error fetching radio data:", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchEpisodes();
+    fetchData();
   }, []);
 
   const handlePlayEpisode = (ep) => {
@@ -85,7 +87,7 @@ const EcouterPage = () => {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="max-w-3xl mx-auto mb-12"
             >
-              <RadioPlayer show={show} />
+              <RadioPlayer show={show} liveUrl={liveUrl} />
             </motion.div>
 
             <motion.div

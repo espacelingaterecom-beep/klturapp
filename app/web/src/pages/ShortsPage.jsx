@@ -14,7 +14,15 @@ const ShortVideo = ({ video, isActive }) => {
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
-  const { currentUser } = useAuth();
+  const { currentUser, isAuthenticated } = useAuth();
+
+  const getMediaUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    // Si c'est un chemin relatif venant du storage Supabase
+    const { data } = supabase.storage.from('uploads').getPublicUrl(url);
+    return data.publicUrl;
+  };
 
   useEffect(() => {
     if (isActive && videoRef.current) {
@@ -36,7 +44,7 @@ const ShortVideo = ({ video, isActive }) => {
   };
 
   const handleLike = async () => {
-    if (!currentUser) return toast.error("Connectez-vous pour liker");
+    if (!isAuthenticated) return toast.error("Connectez-vous pour liker");
     setIsLiked(!isLiked);
     // Logic for liking in DB...
   };
@@ -58,7 +66,7 @@ const ShortVideo = ({ video, isActive }) => {
     <div className="relative h-full w-full bg-black flex items-center justify-center snap-start">
       <video
         ref={videoRef}
-        src={video.video_url}
+        src={getMediaUrl(video.video_url)}
         className="h-full w-full object-cover"
         loop
         playsInline
