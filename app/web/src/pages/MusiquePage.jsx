@@ -26,6 +26,7 @@ const MusiquePage = () => {
   const [trendingMusic, setTrendingMusic] = useState([]);
   const [allMusic, setAllMusic] = useState([]);
   const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
   const [genreFilter, setGenreFilter] = useState('all');
 
   const genres = ['Rap', 'Hip-Hop', 'Trap', 'Drill', 'R&B', 'Afrobeat', 'Autres'];
@@ -36,6 +37,32 @@ const MusiquePage = () => {
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
   };
+
+  useEffect(() => {
+    const fetchSearch = async () => {
+      if (!search.trim()) {
+        setSearchResults([]);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('uploads')
+          .select('*, profiles:user_id(*)')
+          .or(`title.ilike.%${search}%,genre.ilike.%${search}%`)
+          .limit(10);
+        if (error) throw error;
+        setSearchResults(data || []);
+      } catch (err) {
+        console.error("Search Error:", err);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      fetchSearch();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -230,9 +257,39 @@ const MusiquePage = () => {
               <div className="relative max-w-md">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/30" />
                 <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                   placeholder="Rechercher un son, un artiste..."
                   className="pl-12 bg-white/5 border-white/10 h-14 rounded-2xl focus:border-[#D4AF37]"
                 />
+
+                {/* Résultats de recherche en popover */}
+                {search.trim() && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-[#0a0a0a] border border-[#222] rounded-2xl shadow-2xl z-50 overflow-hidden max-h-96 overflow-y-auto">
+                    {searchResults.length === 0 ? (
+                      <div className="p-8 text-center text-white/40 text-sm italic">Aucun résultat pour "{search}"</div>
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {searchResults.map(item => (
+                          <Link
+                            key={item.id}
+                            to={`/uploads/${item.id}`}
+                            className="flex items-center gap-4 p-3 hover:bg-[#111] rounded-xl transition-all group"
+                          >
+                            <div className="h-12 w-12 rounded-lg overflow-hidden shrink-0 border border-[#222]">
+                               <img src={getFileUrl('covers', item.cover_art)} className="h-full w-full object-cover" alt="" />
+                            </div>
+                            <div className="flex-grow min-w-0">
+                               <h4 className="font-bold text-white text-sm truncate group-hover:text-[#D4AF37]">{item.title}</h4>
+                               <p className="text-[10px] text-white/40 uppercase font-black tracking-widest">@{item.profiles?.username}</p>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-white/10 group-hover:text-[#D4AF37]" />
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
