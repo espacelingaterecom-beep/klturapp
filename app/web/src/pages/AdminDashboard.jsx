@@ -42,6 +42,7 @@ const AdminDashboard = () => {
     contentDistribution: []
   });
   const [radioLiveUrl, setRadioLiveUrl] = useState('');
+  const [radioLiveTitle, setRadioLiveTitle] = useState('KLTUR RAP LIVE');
 
   // Form states
   const [newEvent, setNewEvent] = useState({ title: '', date: '', location: '', event_type: 'Concert', description: '' });
@@ -153,10 +154,15 @@ const AdminDashboard = () => {
       // Fetch Radio Live Setting
       const { data: settings } = await supabase
         .from('platform_settings')
-        .select('value')
-        .eq('id', 'radio_live')
-        .maybeSingle();
-      if (settings) setRadioLiveUrl(settings.value);
+        .select('*')
+        .or('id.eq.radio_live,id.eq.radio_live_title');
+
+      if (settings) {
+        const urlSetting = settings.find(s => s.id === 'radio_live');
+        const titleSetting = settings.find(s => s.id === 'radio_live_title');
+        if (urlSetting) setRadioLiveUrl(urlSetting.value);
+        if (titleSetting) setRadioLiveTitle(titleSetting.value);
+      }
 
       // 2. Fetch Users
       const { data: usrs, error: uErr } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -362,12 +368,16 @@ const AdminDashboard = () => {
     e.preventDefault();
     const loadingToast = toast.loading("Mise à jour du direct...");
     try {
-      const { error } = await supabase
+      const { error: err1 } = await supabase
         .from('platform_settings')
         .upsert({ id: 'radio_live', value: radioLiveUrl }, { onConflict: 'id' });
 
-      if (error) throw error;
-      toast.success("Le lien de la radio en direct a été mis à jour !", { id: loadingToast });
+      const { error: err2 } = await supabase
+        .from('platform_settings')
+        .upsert({ id: 'radio_live_title', value: radioLiveTitle }, { onConflict: 'id' });
+
+      if (err1 || err2) throw (err1 || err2);
+      toast.success("La radio en direct a été mise à jour !", { id: loadingToast });
     } catch (err) {
       console.error(err);
       toast.error("Erreur lors de la mise à jour", { id: loadingToast });
@@ -1617,6 +1627,15 @@ const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleUpdateRadioSettings} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase text-white/60">Titre de l'émission actuelle</Label>
+                      <Input
+                        value={radioLiveTitle}
+                        onChange={(e) => setRadioLiveTitle(e.target.value)}
+                        className="bg-[#111] border-[#222] h-12 focus:border-[#D4AF37]"
+                        placeholder="Ex: KLTUR RAP LIVE - Spécial Bangui"
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-black uppercase text-white/60">Lien du flux (Icecast/Radio.co/YouTube)</Label>
                       <Input

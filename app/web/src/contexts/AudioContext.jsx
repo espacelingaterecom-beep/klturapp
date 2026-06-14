@@ -28,6 +28,7 @@ export const AudioProvider = ({ children }) => {
   }, []);
 
   const registerView = async (trackId) => {
+    if (!trackId || trackId.toString().startsWith('radio-')) return;
     try {
       const isPremiumUser = currentUser?.is_premium || false;
       await supabase.rpc('increment_view_count', {
@@ -93,9 +94,23 @@ export const AudioProvider = ({ children }) => {
     }
 
     setCurrentTrack({ ...track, isOffline: !!downloaded });
-    audioRef.current.src = finalUrl;
-    audioRef.current.play();
-    setIsPlaying(true);
+
+    try {
+      audioRef.current.src = finalUrl;
+      const playPromise = audioRef.current.play();
+
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.error("Playback failed:", error);
+          setIsPlaying(false);
+          toast.error("Impossible de lire ce flux. Vérifiez votre connexion ou le lien.");
+        });
+      }
+      setIsPlaying(true);
+    } catch (err) {
+      console.error("Setup failed:", err);
+      toast.error("Erreur de configuration du lecteur.");
+    }
   };
 
   const downloadForOffline = async (track) => {
