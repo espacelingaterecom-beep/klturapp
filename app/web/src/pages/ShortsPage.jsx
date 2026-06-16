@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Music, Play, Pause, ChevronLeft, Send, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music, Play, ChevronLeft, Send, X } from 'lucide-react';
 import { supabase, getPublicImageUrl } from '@/lib/supabaseClient.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -31,7 +31,7 @@ const ShortVideo = ({ video, isActive }) => {
 
   useEffect(() => {
     if (isActive && videoRef.current) {
-      videoRef.current.play().catch(e => console.log("Auto-play blocked"));
+      videoRef.current.play().catch(() => console.log("Auto-play blocked"));
       setIsPlaying(true);
       checkUserLike();
       fetchCommentCount();
